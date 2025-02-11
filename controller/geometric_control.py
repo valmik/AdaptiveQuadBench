@@ -435,7 +435,7 @@ class GeoControl(object):
         # cmd_v = -self.kp_vel*pos_err + flat_output['x_dot']     # Commanded velocity in world frame (if using cmd_vel control abstraction), in units m/s
         cmd_v = flat_output['x_dot']     # sheng: desired velocity (use the simplified version)
         
-        control_input = {'cmd_motor_speeds':cmd_motor_speeds,
+        control_input = {'cmd_motor_speeds':cmd_motor_speeds.reshape(4,),
                          'cmd_motor_thrusts':cmd_rotor_thrusts,
                          'cmd_thrust':cmd_thrust[0],
                          'cmd_moment':cmd_moment.reshape(3,),

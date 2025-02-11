@@ -396,15 +396,15 @@ class L1_GeoControl(object):
             sigma_m_hat_2to4 = np.array([0.0,0.0,0.0]) # second to fourth element of the estimated matched uncertainty
             sigma_um_hat = np.array([0.0,0.0]) # estimated unmatched uncertainty
 
-            sigma_m_hat[0] = -np.dot(R[:,2], PhiInvmu_v) * kg_vehicleMass
+            sigma_m_hat[0] = np.dot(R[:,2], PhiInvmu_v) * kg_vehicleMass
             # turn np.dot(R[:,2], PhiInvmu_v) * kg_vehicleMass to -np.dot(R[:,2], PhiInvmu_v) * kg_vehicleMass
             sigma_m_hat_2to4 = -np.matmul(J, PhiInvmu_omega)
             sigma_m_hat[1] = sigma_m_hat_2to4[0]
             sigma_m_hat[2] = sigma_m_hat_2to4[1]
             sigma_m_hat[3] = sigma_m_hat_2to4[2]
 
-            sigma_um_hat[0] = np.dot(R[:,0], PhiInvmu_v) * kg_vehicleMass
-            sigma_um_hat[1] = np.dot(R[:,1], PhiInvmu_v) * kg_vehicleMass
+            sigma_um_hat[0] = -np.dot(R[:,0], PhiInvmu_v) * kg_vehicleMass
+            sigma_um_hat[1] = -np.dot(R[:,1], PhiInvmu_v) * kg_vehicleMass
 
             # store uncertainty estimations
             sigma_m_hat_prev = sigma_m_hat
@@ -447,7 +447,7 @@ class L1_GeoControl(object):
             R_prev = R
             u_b_prev = np.array([f,M[0],M[1],M[2]])
 
-            controlcmd_L1 = np.array([f,M[0],M[1],-M[2]]) + u_ad_prev
+            controlcmd_L1 = np.array([f,M[0],M[1],M[2]]) + u_ad_prev
 
             self.din_L1 = (v_hat_prev, omega_hat_prev, R_prev, v_prev, omega_prev,
             u_b_prev, u_ad_prev, sigma_m_hat_prev, sigma_um_hat_prev,
@@ -613,7 +613,7 @@ class L1_GeoControl(object):
         # cmd_v = -self.kp_vel*pos_err + flat_output['x_dot']     # Commanded velocity in world frame (if using cmd_vel control abstraction), in units m/s
         cmd_v = flat_output['x_dot']     # sheng: desired velocity (use the simplified version)
         
-        control_input = {'cmd_motor_speeds':cmd_motor_speeds,
+        control_input = {'cmd_motor_speeds':cmd_motor_speeds.reshape(4,),
                          'cmd_motor_thrusts':cmd_rotor_thrusts,
                          'cmd_thrust':cmd_thrust[0],
                          'cmd_moment':cmd_moment.reshape(3,),
