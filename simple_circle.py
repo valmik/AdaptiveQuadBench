@@ -15,7 +15,8 @@ from rotorpy.controllers.quadrotor_control import SE3Control
 from controller.geometric_adaptive_controller import GeometricAdaptiveController
 from controller.geometric_control import GeoControl
 from controller.geometric_control_l1 import L1_GeoControl
-from controller.quadrotor_control_mpc import ModelPredictiveControl
+from controller.indi_adaptive_controller import INDIAdaptiveController
+# from controller.quadrotor_control_mpc import ModelPredictiveControl
 
 # And a trajectory generator
 from rotorpy.trajectories.hover_traj import HoverTraj
@@ -53,22 +54,23 @@ import os                           # For path generation
 """
 Instantiation
 """
-#MPC param. Total horizon = 5 seconds, MPC horizon is 0.5 second, and MPC sampling time 0.05 s.
-sim_rate = 100
-t_final = 5
-t_horizon = 0.5
-n_nodes = 10
+# #MPC param. Total horizon = 5 seconds, MPC horizon is 0.5 second, and MPC sampling time 0.05 s.
+# sim_rate = 100
+# t_final = 5
+# t_horizon = 0.5
+# n_nodes = 10
+# mpc_controller = ModelPredictiveControl(quad_params=quad_params, sim_rate = sim_rate, trajectory = CircularTraj(radius=2), f_final = t_final, t_horizon = t_horizon, n_nodes = n_nodes)
 
-mpc_controller = ModelPredictiveControl(quad_params=quad_params, sim_rate = sim_rate, trajectory = CircularTraj(radius=2), f_final = t_final, t_horizon = t_horizon, n_nodes = n_nodes)
 # An instance of the simulator can be generated as follows: 
-sim_instance = Environment(vehicle=Multirotor(quad_params,control_abstraction='cmd_ctbm'),           # vehicle object, must be specified.  # ! choose the appropriate control abstraction
+sim_instance = Environment(vehicle=Multirotor(quad_params,control_abstraction='cmd_motor_speeds'),           # vehicle object, must be specified.  # ! choose the appropriate control abstraction
                            #controller=GeometricAdaptiveController(quad_params),        # ! Replace your Controller here 
                         #    controller=SE3Control(quad_params),
-                            #controller=GeoControl(quad_params),
+                        #     controller=GeoControl(quad_params),
                            #controller=L1_GeoControl(quad_params),
-                           controller = mpc_controller,
+                        #    controller = mpc_controller,
+                           controller=INDIAdaptiveController(quad_params),
                            trajectory=CircularTraj(radius=2),         # trajectory object, must be specified.
-                        #    wind_profile=SinusoidWind(),               # OPTIONAL: wind profile object, if none is supplied it will choose no wind. 
+                           wind_profile=SinusoidWind(),               # OPTIONAL: wind profile object, if none is supplied it will choose no wind. 
                            #wind = ConstantWind(1,1,1)
                            sim_rate     = 100,                        # OPTIONAL: The update frequency of the simulator in Hz. Default is 100 Hz.
                            imu          = None,                       # OPTIONAL: imu sensor object, if none is supplied it will choose a default IMU sensor.
@@ -93,7 +95,7 @@ x0 = {'x': np.array([0,0,0]),
       'q': np.array([0, 0, 0, 1]), # [i,j,k,w]
       'w': np.zeros(3,),
       'wind': np.array([0,0,0]),  # Since wind is handled elsewhere, this value is overwritten
-      'rotor_speeds': np.array([1788.53, 1788.53, 1788.53, 1788.53])}
+      'rotor_speeds': np.array([0,0,0,0])}
 sim_instance.vehicle.initial_state = x0
 
 # Executing the simulator as specified above is easy using the "run" method: 
