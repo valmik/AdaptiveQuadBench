@@ -125,7 +125,7 @@ class L1_GeoControl(object):
         """ Initialization of L1 inputs """
         self.v_hat_prev = np.array([0.0, 0.0, 0.0])
         self.omega_hat_prev = np.array([0.0, 0.0, 0.0])
-        self.R_prev = np.zeros((9,)).reshape(3,3)
+        self.R_prev = np.eye(3) 
         self.v_prev = np.array([0.0,0.0,0.0])
         self.omega_prev = np.array([0.0,0.0,0.0])
 
@@ -266,17 +266,7 @@ class L1_GeoControl(object):
         cmd_thrust = 0
         cmd_moment = np.zeros((3,))
         cmd_q = np.zeros((4,))
-        
-        # sheng: move the private functions here
-
-        # def normalize(x):
-        #     """Return normalized vector."""
-        #     return x / np.linalg.norm(x)
-
-        # def vee_map(S):
-        #     """Return vector corresponding to given skew symmetric matrix."""
-        #     return np.array([-S[1,2], S[0,2], -S[0,1]])
-        
+                
         def wedge(x):
             """Return wedged vector."""
             wedge_x = np.array([[0,-x[2][0], x[1][0]], [x[2][0], 0, -x[0][0]], [-x[1][0], x[0][0], 0]])
@@ -369,7 +359,8 @@ class L1_GeoControl(object):
             vpred_error_prev = v_hat_prev - v_prev # computes v_tilde for (k-1) step
             omegapred_error_prev = omega_hat_prev - omega_prev # computes omega_tilde for (k-1) step
 
-            v_hat = v_hat_prev + (-e3 * GRAVITY_MAGNITUDE - R_prev[:,2]* (u_b_prev[0] + u_ad_prev[0] + sigma_m_hat_prev[0]) * massInverse + R_prev[:,0] * sigma_um_hat_prev[0] * massInverse + R_prev[:,1] * sigma_um_hat_prev[1] * massInverse + vpred_error_prev * As_v) * dt
+            v_hat = v_hat_prev + (-e3 * GRAVITY_MAGNITUDE + R_prev[:,2]* (u_b_prev[0] + u_ad_prev[0] + sigma_m_hat_prev[0]) * massInverse + R_prev[:,0] * sigma_um_hat_prev[0] * massInverse + R_prev[:,1] * sigma_um_hat_prev[1] * massInverse + vpred_error_prev * As_v) * dt
+           
             Jinv = la.inv(J)
             # temp vector: thrustMomentCmd[1--3] + u_ad_prev[1--3] + sigma_m_hat_prev[1--3]
             # original form
@@ -396,7 +387,7 @@ class L1_GeoControl(object):
             sigma_m_hat_2to4 = np.array([0.0,0.0,0.0]) # second to fourth element of the estimated matched uncertainty
             sigma_um_hat = np.array([0.0,0.0]) # estimated unmatched uncertainty
 
-            sigma_m_hat[0] = np.dot(R[:,2], PhiInvmu_v) * kg_vehicleMass
+            sigma_m_hat[0] = -np.dot(R[:,2], PhiInvmu_v) * kg_vehicleMass # don't forget the minus
             # turn np.dot(R[:,2], PhiInvmu_v) * kg_vehicleMass to -np.dot(R[:,2], PhiInvmu_v) * kg_vehicleMass
             sigma_m_hat_2to4 = -np.matmul(J, PhiInvmu_omega)
             sigma_m_hat[1] = sigma_m_hat_2to4[0]
@@ -534,42 +525,6 @@ class L1_GeoControl(object):
             M = - k['R'] * eR - k['W'] * eW + wedge(W) @ (J @ W) - J @ (wedge(W) @ np.transpose(R) @ Rd @ Wd - np.transpose(R) @ Rd @ Wddot)
             return M, eR, eW
 
-        # the original code starts from below
-        # # Get the desired force vector.
-        # pos_err  = state['x'] - flat_output['x']
-        # dpos_err = state['v'] - flat_output['x_dot']
-        # F_des = self.mass * (- self.kp_pos*pos_err
-        #                      - self.kd_pos*dpos_err
-        #                      + flat_output['x_ddot']
-        #                      + np.array([0, 0, self.g]))
-
-        # # Desired thrust is force projects onto b3 axis.
-        # R = Rotation.from_quat(state['q']).as_matrix()
-        # b3 = R @ np.array([0, 0, 1])
-        # u1 = np.dot(F_des, b3)
-
-        # # Desired orientation to obtain force vector.
-        # b3_des = normalize(F_des)
-        # yaw_des = flat_output['yaw']
-        # c1_des = np.array([np.cos(yaw_des), np.sin(yaw_des), 0])
-        # b2_des = normalize(np.cross(b3_des, c1_des))
-        # b1_des = np.cross(b2_des, b3_des)
-        # R_des = np.stack([b1_des, b2_des, b3_des]).T
-
-        # # Orientation error.
-        # S_err = 0.5 * (R_des.T @ R - R.T @ R_des) # sheng: this is the same as we do
-        # att_err = vee_map(S_err)
-
-        # # Angular velocity error (this is oversimplified).
-        # w_des = np.array([0, 0, flat_output['yaw_dot']]) # sheng: this is indeed oversimplified
-        # w_err = state['w'] - w_des
-
-        # # Desired torque, in units N-m.
-        # u2 = self.inertia @ (-self.kp_att*att_err - self.kd_att*w_err) + np.cross(state['w'], self.inertia@state['w'])  # Includes compensation for wxJw component
-
-        # # Compute command body rates by doing PD on the attitude error. 
-        # cmd_w = -self.kp_att*att_err - self.kd_att*w_err
-
         # Compute motor speeds. Avoid taking square root of negative numbers.
         f, M, u, error, R_des, omega_des = geometric_controller(self, state, flat_output)
         f = f[0]
@@ -582,36 +537,19 @@ class L1_GeoControl(object):
 
         f_l1, M_l1, sigma_m_hat = L1AC(self,R,W,x,v,f,M)
 
-        # u_new = np.vstack((f_l1, M_l1[0]))
-        # u_new = np.vstack((u_new, M_l1[1]))
-        # u_new = np.vstack((u_new, M_l1[2]))
         u_new = np.vstack((f_l1.reshape(1,1),M_l1.reshape(3,1)))
-        # u_new = np.vstack((f, M[0]))
-        # u_new = np.vstack((u_new, M[1]))
-        # u_new = np.vstack((u_new, M[2]))
-        # print('f is ', f)
-        # print('M is ', M)
-        # print('u is ', u)
-        # print('x is ',x)
-        # print('v is ',v)
-        # print('R is ',R)
-        # print('W is ',W)
-        # print('uncertainty is ', sigma_m_hat)
-        # print('f_l1 ', f_l1)
-        # print('M_l1 ', M_l1)
-        # print('after u is ', u_new)
-        # print(' ')
+
         TM = np.array(u_new)
         cmd_rotor_thrusts = self.TM_to_f @ TM
         cmd_motor_speeds = cmd_rotor_thrusts / self.k_eta
         cmd_motor_speeds = np.sign(cmd_motor_speeds) * np.sqrt(np.abs(cmd_motor_speeds))
 
-        # Assign controller commands. sheng: todo
+        # Assign controller commands. 
         cmd_thrust = u_new[0]                                             # Commanded thrust, in units N.
         cmd_moment = u_new[1:4]                                             # Commanded moment, in units N-m.
         cmd_q = Rotation.from_matrix(R_des).as_quat()               # Commanded attitude as a quaternion.
         # cmd_v = -self.kp_vel*pos_err + flat_output['x_dot']     # Commanded velocity in world frame (if using cmd_vel control abstraction), in units m/s
-        cmd_v = flat_output['x_dot']     # sheng: desired velocity (use the simplified version)
+        cmd_v = flat_output['x_dot']     
         
         control_input = {'cmd_motor_speeds':cmd_motor_speeds.reshape(4,),
                          'cmd_motor_thrusts':cmd_rotor_thrusts,
