@@ -16,7 +16,8 @@ from controller.geometric_adaptive_controller import GeometricAdaptiveController
 from controller.geometric_control import GeoControl
 from controller.geometric_control_l1 import L1_GeoControl
 from controller.indi_adaptive_controller import INDIAdaptiveController
-# from controller.quadrotor_control_mpc import ModelPredictiveControl
+from controller.quadrotor_control_mpc import ModelPredictiveContro
+from controller.quadrotor_control_mpc_l1 import L1_ModelPredictiveControll
 
 # And a trajectory generator
 from rotorpy.trajectories.hover_traj import HoverTraj
@@ -67,12 +68,12 @@ sim_instance = Environment(vehicle=Multirotor(quad_params,control_abstraction='c
                            #controller=GeometricAdaptiveController(quad_params),        # ! Replace your Controller here 
                         #    controller=SE3Control(quad_params),
                         #     controller=GeoControl(quad_params),
-                        controller=L1_GeoControl(quad_params),
+                              controller=L1_GeoControl(quad_params),
                         #    controller = mpc_controller,
                            #controller=INDIAdaptiveController(quad_params),
                            trajectory=CircularTraj(radius=2),         # trajectory object, must be specified.
                            #wind_profile=SinusoidWind(),               # OPTIONAL: wind profile object, if none is supplied it will choose no wind. 
-                           #wind = ConstantWind(1,1,1)
+                           wind_profile = ConstantWind(0,0,5),
                            sim_rate     = 100,                        # OPTIONAL: The update frequency of the simulator in Hz. Default is 100 Hz.
                            imu          = None,                       # OPTIONAL: imu sensor object, if none is supplied it will choose a default IMU sensor.
                            mocap        = None,                       # OPTIONAL: mocap sensor object, if none is supplied it will choose a default mocap.  
