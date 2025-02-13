@@ -1,177 +1,215 @@
-"""
-Imports
-"""
- 
+# Import your controller here
+from controller.geometric_control import GeoControl
+from controller.geometric_adaptive_controller import GeometricAdaptiveController
+from controller.geometric_control_l1 import L1_GeoControl
+from controller.indi_adaptive_controller import INDIAdaptiveController
+from controller.quadrotor_control_mpc import ModelPredictiveControl
+from controller.quadrotor_control_mpc_l1 import L1_ModelPredictiveControl
+# Import your vehicle here
+from quad_param.Agilicious import quad_params
+
 from rotorpy.vehicles.multirotor import Multirotor
-from rotorpy.vehicles.crazyflie_params import quad_params
-from rotorpy.controllers.quadrotor_control import SE3Control
-from rotorpy.trajectories.hover_traj import HoverTraj
-from rotorpy.trajectories.circular_traj import CircularTraj, ThreeDCircularTraj
-from rotorpy.trajectories.lissajous_traj import TwoDLissajous
-from rotorpy.trajectories.speed_traj import ConstantSpeed
-from rotorpy.trajectories.minsnap import MinSnap 
 from rotorpy.world import World
-from rotorpy.utils.animate import animate
-from rotorpy.simulate import merge_dicts
+from rotorpy.environments import Environment
+from rotorpy.wind.dryden_winds import DrydenGust
 
-import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
-from scipy.spatial.transform import Rotation
+from parallel_data_collection import generate_data
+
+import time
 import os
-import yaml
-import multiprocessing
+import csv
+import numpy as np
+import pandas as pd
 
-####################### Helper functions
+import argparse
 
-def run_sim(trajectory, t_offset, t_final=10, t_step=1/100):
-    """
-    Runs an instance of the simulation environment which creates a vehicle object and tracking controller on
-    an individual cpu process using Python's multiprocessing. 
-    Inputs:
-        trajectory: the trajectory object for this mav to track. 
-        t_offset: time offset (useful for offsetting multiple mavs on the same trajectory). 
-        t_final: duration of the sim for this object. 
-        t_step: timestep for the simulation. 
-    Outputs:
-        time: time array. 
-        states: array of quadrotor states. 
-        controls: array of quadrotor control variables. 
-        flats: array of flat outputs describing the trajectory to track. 
-    """
-    mav = Multirotor(quad_params)
-    controller = SE3Control(quad_params)
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--controller', type=str, default='geo', help='controller type: geo, geo-a, l1geo, l1mpc, indi-a, xadap')
+    parser.add_argument('--experiment', type=str, default='wind', help='experiment type: wind, uncertainty')
+    parser.add_argument('--num_trials', type=int, default=100)
+    parser.add_argument('--parallel', type=bool, default=True, help='if run in parallel')
+    parser.add_argument('--seed', type=int, default=42, help='seed for random number generator')
+    parser.add_argument('--save_trials', type=bool, default=False, help='save individual trials to csv')
+    return parser.parse_args()
 
-    # Init mav at the first waypoint for the trajectory.
-    x0 = {'x': trajectory.update(t_offset)['x'],
-        'v': np.zeros(3,),
-        'q': np.array([0, 0, 0, 1]), # [i,j,k,w]
-        'w': np.zeros(3,),
-        'wind': np.array([0,0,0]),  # Since wind is handled elsewhere, this value is overwritten
-        'rotor_speeds': np.array([1788.53, 1788.53, 1788.53, 1788.53])}
+def switch_controller(controller_type,quad_params):
+    if controller_type == 'geo':
+        return GeoControl(quad_params)
+    elif controller_type == 'geo-a':
+        return GeometricAdaptiveController(quad_params)
+    elif controller_type == 'l1geo':
+        return L1_GeoControl(quad_params)
+    elif controller_type == 'indi-a':
+        return INDIAdaptiveController(quad_params)
+    elif controller_type == 'l1mpc':
+        return L1_ModelPredictiveControl(quad_params)
+    else:
+        raise ValueError(f"Controller type {controller_type} not supported yet")
+
+def create_wind_profiles(num_profiles, seed=None):
+    """Pre-generate multiple wind profiles"""
+    if seed is not None:
+        np.random.seed(seed)
     
-    time = [0]
-    states = [x0]
-    flats = [trajectory.update(time[-1] + t_offset)]
-    controls = [controller.update(time[-1], states[-1], flats[-1])]
+    wind_profiles = []
+    for i in range(num_profiles):
+        wind_mean = np.random.uniform(-2, 2, size=3)
+        wind_var = np.random.uniform(0.1, 1.0, size=3)
+        # Randomize the wind input for this trial
+        wx = np.random.uniform(low=-3, high=3)
+        wy = np.random.uniform(low=-3, high=3)
+        wz = np.random.uniform(low=-3, high=3)
+        sx = np.random.uniform(low=30, high=60)
+        sy = np.random.uniform(low=30, high=60)
+        sz = np.random.uniform(low=30, high=60)
+        wind_profile = DrydenGust(dt=1/100, avg_wind=np.array([wx,wy,wz]), sig_wind=np.array([sx,sy,sz]))
+        wind_profiles.append(wind_profile)
+    
+    return wind_profiles
 
-    while True:
-        if time[-1] >= t_final:
-            break
-        time.append(time[-1] + t_step)
-        states.append(mav.step(states[-1], controls[-1], t_step))
-        flats.append(trajectory.update(time[-1] + t_offset))
-        controls.append(controller.update(time[-1], states[-1], flats[-1]))
+def create_randomized_controllers(controller_type, base_params, num_controllers, seed=None):
+    """Pre-generate multiple controller instances with randomized parameter assumptions"""
+    if seed is not None:
+        np.random.seed(seed)
+    
+    controllers = []
+    for i in range(num_controllers):
+        params = base_params.copy()
+        # TODO
+        # Add random perturbations to controller's parameter assumptions
+        params['mass'] *= (1 + np.random.normal(0, 0.1))  # 10% variation
+        params['Ixx'] *= (1 + np.random.normal(0, 0.1))
+        params['Iyy'] *= (1 + np.random.normal(0, 0.1))
+        params['Izz'] *= (1 + np.random.normal(0, 0.1))
+        
+        controllers.append(switch_controller(controller_type, params))
+    
+    return controllers
 
-    time        = np.array(time, dtype=float)    
-    states      = merge_dicts(states)
-    controls    = merge_dicts(controls)
-    flats       = merge_dicts(flats)
-
-    return time, states, controls, flats
-
-def worker_fn(cfg):
+def generate_summary(controller_type, controllers, vehicle, wind_profiles,
+                      num_simulations=100, parallel_bool=True, save_trials=False):
     """
-    Enumerates over the configurations for each process in multiprocessing.
-    """
-    return run_sim(*cfg)
-
-def find_collisions(all_positions, epsilon=1e-1):
-    """
-    Checks if any two agents get within epsilon meters of any other agent. 
+    Main function for generating data.
     Inputs:
-        all_positions: the position vs time for each agent concatenated into one array. 
-        epsilon: the distance threshold constituting a collision. 
+        controller: The controller to use.
+        vehicle: The vehicle to use.
+        wind_profile: The wind profile to use.
+        num_simulations: The number of simulations to run.
+        parallel_bool: If True, runs the simulations in parallel. If False, runs the simulations sequentially.
+        save_trials: If True, saves each trial data to a separate .csv file. Uses more memory, but allows you to see the results of each trial at a later date.
     Outputs:
-        collisions: a list of dictionaries where each dict describes the time of a collision, agents involved, and the location. 
+        None. It writes to the output file.
     """
 
-    N, M, _ = all_positions.shape
-    collisions = []
+    world_size = 10
+    num_waypoints = 4
+    vavg = 2
+    random_yaw = False
+    yaw_min = -0.85*np.pi
+    yaw_max = 0.85*np.pi
 
-    for t in range(N):
-        # Get positions. 
-        pos_t = all_positions[t]
+    world_buffer = 2
+    min_distance = 1
+    max_distance = min_distance+3
+    start_waypoint = None               # If you want to start at a specific waypoint, specify it using [xstart, ystart, zstart]
+    end_waypoint = None                 # If you want to end at a specific waypoint, specify it using [xend, yend, zend]
 
-        dist_sq = np.sum((pos_t[:, np.newaxis, :] - pos_t[np.newaxis, :, :])**2, axis=-1)
+    # convert controller to string
+    controller_name = str(controller_type)
 
-        # Set diagonal to a large value to avoid false positives. 
-        np.fill_diagonal(dist_sq, np.inf)
+    # Create the output file and handle existing files
+    output_csv_file = os.path.dirname(__file__) + f'/data/summary_{controller_name}.csv'
 
-        close_pairs = np.where(dist_sq < epsilon**2)
+    if os.path.exists(output_csv_file):
+        # Ask the user if they want to remove the existing file.
+        user_input = input("The file {} already exists. Do you want to remove the existing file? (y/n)".format(output_csv_file))
+        if user_input == 'y':
+            # Remove the existing file
+            os.remove(output_csv_file)
+        elif user_input == 'n':
+            raise Exception("Please delete or rename the file {} before running this script.".format(output_csv_file))
+        else:
+            raise Exception("Invalid input. Please enter 'y' or 'n'.")
+    
+    savepath = None
+    if save_trials:
+        savepath = os.path.dirname(__file__)+ f'/data/trial_data_{controller_name}'
+        print(f"savepath: {savepath}")
+        if not os.path.exists(savepath):
+            os.makedirs(savepath)
+        else:
+            # Ask the user if they want to remove the existing files in the directory.
+            user_input = input(f"The directory {savepath} already exists. Do you want to remove the existing files? (y/n)")
+            if user_input == 'y':
+                # Remove existing files in the directory
+                for file in os.listdir(savepath):
+                    os.remove(os.path.join(savepath, file))
+            elif user_input == 'n':
+                raise Exception(f"Please delete or rename the files in the directory {savepath} before running this script.")
+            else:
+                raise Exception("Invalid input. Please enter 'y' or 'n'.")
 
-        for i, j in zip(*close_pairs):
-            if i < j: # avoid duplicate pairs.
-                collision_info = {
-                    "timestep": t,
-                    "agents": (i, j),
-                    "location": pos_t[i]
-                }
-                collisions.append(collision_info)
+    # Append headers to the output file
+    with open(output_csv_file, 'w', newline='') as file:
+        writer = csv.writer(file)
+        # This depends on the number of waypoints and the order of the polynomial. Currently pos is 7th order and yaw is 7th order.
+        writer.writerow(['traj_number'] + ['pos_tracking_error'] + ['heading_error'] 
+                + ['x_poly_seg_{}_coeff_{}'.format(i,j) for i in range(num_waypoints-1) for j in range(8)]
+                + ['y_poly_seg_{}_coeff_{}'.format(i,j) for i in range(num_waypoints-1) for j in range(8)]
+                + ['z_poly_seg_{}_coeff_{}'.format(i,j) for i in range(num_waypoints-1) for j in range(8)]
+                + ['yaw_poly_seg_{}_coeff_{}'.format(i,j) for i in range(num_waypoints-1) for j in range(8)])  
 
-    return collisions
+    # Create world
+    world = World.empty([-world_size/2, world_size/2, -world_size/2, world_size/2, -world_size/2, world_size/2])
 
-####################### Start of user code
+    # Generate the data
+    start_time = time.time()
+    generate_data(output_csv_file, world, vehicle, controllers, wind_profiles,
+                  num_simulations, num_waypoints, vavg, 
+                  random_yaw, yaw_min, yaw_max, 
+                  world_buffer, min_distance, max_distance, 
+                  start_waypoint, end_waypoint,
+                  parallel=parallel_bool,
+                  save_individual_trials=save_trials,
+                  save_trial_path=savepath)
+    end_time = time.time()
+    print("Time elapsed: %3.2f seconds, parallel: %s" % (end_time-start_time, parallel_bool))
 
-# Construct the world.
-world = World.empty([-3, 3, -3, 3, -3, 3])
+    # Print final summary
+    df = pd.read_csv(output_csv_file)
+    # print average of the pos_tracking_error column
+    print("--------------------------------")
+    print(f"Controller: {controller_name}")
+    print("--------------------------------")
+    print(f"Average pos_tracking_error: {df['pos_tracking_error'].mean():.2f} m")
+    print(f"Average heading_error: {df['heading_error'].mean():.2f} deg")
+    print("--------------------------------")
 
-# Generate a list of configurations to run in parallel. Each config has a trajectory, time offset, sim duration, and sim time discretization.
-dt = 1/100
-tf = 10
+    return None
 
-# Hard coded list of Lissajous maneuvers. 
-config_list = [(TwoDLissajous(A=1, B=1, a=2, b=1, x_offset=-0.5, y_offset=0, height=2.0), 0, tf, dt),
-               (TwoDLissajous(A=1, B=1, a=2, b=1, x_offset=-0.25, y_offset=0, height=2.0), 0.5, tf, dt),
-               (TwoDLissajous(A=1, B=1, a=2, b=1, x_offset=0.0, y_offset=0, height=2.0), 1.0, tf, dt),
-               (TwoDLissajous(A=1, B=1, a=2, b=1, x_offset=0.25, y_offset=0, height=2.0), 1.5, tf, dt),
-               (TwoDLissajous(A=1, B=1, a=2, b=1, x_offset=0.50, y_offset=0, height=2.0), 2.0, tf, dt)]
+def main():
+    args = parse_args()
+    vehicle = Multirotor(quad_params)  # Single vehicle instance
+    
+    # Create controllers and wind profiles based on experiment type
+    if args.experiment == 'wind':
+        # Create standard controllers with no parameter variation
+        controllers = [switch_controller(args.controller, quad_params) for _ in range(args.num_trials)]
+        # Create varied wind profiles
+        wind_profiles = create_wind_profiles(args.num_trials, seed=args.seed)
+    
+    elif args.experiment == 'uncertainty':
+        # Create controllers with parameter variations
+        controllers = create_randomized_controllers(args.controller, quad_params, args.num_trials, seed=args.seed)
+        # Create standard (or no) wind profiles
+        wind_profiles = [None] * args.num_trials
+    
+    else:
+        raise ValueError(f"Experiment type {args.experiment} not supported")
 
-# Programmatic construction of a swarm of MAVs following a MinSnap trajectory. 
-Nc = 7
-R = 0.5
-for i in range(Nc):
-    x0 = np.array([-2 + R*np.cos(i*2*np.pi/Nc), R*np.sin(i*2*np.pi/Nc), 0])
-    xf = np.array([ 2 + R*np.cos(i*2*np.pi/Nc), R*np.sin(i*2*np.pi/Nc), 0])
-    config_list.append((MinSnap(points=np.row_stack((x0, xf)), v_avg=1.0, verbose=False), 0, tf, dt))
+    generate_summary(args.controller, controllers, vehicle, wind_profiles, 
+                    args.num_trials, args.parallel, args.save_trials)
 
-# Run RotorPy in parallel. 
-with multiprocessing.Pool() as pool:
-    results = pool.map(worker_fn, config_list)
-
-# Concatentate all the relevant states/inputs for animation. 
-all_pos = []
-all_rot = []
-all_wind = []
-all_time = results[0][0]
-
-for r in results:
-    all_pos.append(r[1]['x'])
-    all_wind.append(r[1]['wind'])
-    all_rot.append(Rotation.from_quat(r[1]['q']).as_matrix())
-
-all_pos = np.stack(all_pos, axis=1)
-all_wind = np.stack(all_wind, axis=1)
-all_rot = np.stack(all_rot, axis=1)
-
-# Check for collisions.
-collisions = find_collisions(all_pos, epsilon=2e-1)
-
-# Animate. 
-ani = animate(all_time, all_pos, all_rot, all_wind, animate_wind=False, world=world, filename=None)
-
-# Plot the positions of each agent in 3D, alongside collision events (when applicable)
-fig = plt.figure()
-ax = fig.add_subplot(projection='3d')
-colors = plt.cm.tab10(range(all_pos.shape[1]))
-for mav in range(all_pos.shape[1]):
-    ax.plot(all_pos[:, mav, 0], all_pos[:, mav, 1], all_pos[:, mav, 2], color=colors[mav])
-    ax.plot([all_pos[-1, mav, 0]], [all_pos[-1, mav, 1]], [all_pos[-1, mav, 2]], '*', markersize=10, markerfacecolor=colors[mav], markeredgecolor='k')
-world.draw(ax)
-for event in collisions:
-    ax.plot([all_pos[event['timestep'], event['agents'][0], 0]], [all_pos[event['timestep'], event['agents'][0], 1]], [all_pos[event['timestep'], event['agents'][0], 2]], 'rx', markersize=10)
-ax.set_xlabel("x, m")
-ax.set_ylabel("y, m")
-ax.set_zlabel("z, m")
-
-plt.show()
+if __name__ == '__main__':
+    main()
