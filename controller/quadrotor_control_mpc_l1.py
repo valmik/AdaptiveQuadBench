@@ -1,11 +1,7 @@
 import numpy as np
-from time import time
 from collections import deque
 from scipy.spatial.transform import Rotation
-from rotorpy.trajectories.hover_traj  import HoverTraj
-from rotorpy.controllers.quadrotor_mpc_1 import QuadMPC
-from rotorpy.controllers.quadrotor_util import skew_symmetric, v_dot_q, quaternion_inverse
-from rotorpy.learning.util import compute_res
+from controller.quadrotor_mpc import QuadMPC
 import numpy.linalg as la
 import math
 
@@ -286,7 +282,7 @@ class L1_ModelPredictiveControl(object):
         cmd_thrust = cmd_TM[0]
         cmd_moment = np.array([cmd_TM[1], cmd_TM[2], cmd_TM[3]])
         cmd_q = np.zeros((4,)) # 
-        control_input = {'cmd_motor_speeds':cmd_motor_speeds,
+        control_input = {'cmd_motor_speeds':cmd_motor_speeds.reshape(4,),
                          'cmd_thrust':cmd_thrust,
                          'cmd_moment':cmd_moment,
                          'cmd_q':cmd_q}  # This dict is required by simulation env

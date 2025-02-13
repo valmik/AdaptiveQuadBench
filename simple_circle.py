@@ -16,8 +16,8 @@ from controller.geometric_adaptive_controller import GeometricAdaptiveController
 from controller.geometric_control import GeoControl
 from controller.geometric_control_l1 import L1_GeoControl
 from controller.indi_adaptive_controller import INDIAdaptiveController
-from controller.quadrotor_control_mpc import ModelPredictiveContro
-from controller.quadrotor_control_mpc_l1 import L1_ModelPredictiveControll
+from controller.quadrotor_control_mpc import ModelPredictiveControl
+from controller.quadrotor_control_mpc_l1 import L1_ModelPredictiveControl
 
 # And a trajectory generator
 from rotorpy.trajectories.hover_traj import HoverTraj
@@ -55,13 +55,13 @@ import os                           # For path generation
 """
 Instantiation
 """
-# #MPC param. Total horizon = 5 seconds, MPC horizon is 0.5 second, and MPC sampling time 0.05 s.
-# sim_rate = 100
-# t_final = 5
-# t_horizon = 0.5
-# n_nodes = 10
-# mpc_controller = ModelPredictiveControl(quad_params=quad_params, sim_rate = sim_rate, trajectory = CircularTraj(radius=2), t_final = t_final, t_horizon = t_horizon, n_nodes = n_nodes)
-# l1_mpc_controller = L1_ModelPredictiveControl(quad_params=quad_params, sim_rate = sim_rate, trajectory = CircularTraj(radius=2), t_final = t_final, t_horizon = t_horizon, n_nodes = n_nodes)
+#MPC param. Total horizon = 5 seconds, MPC horizon is 0.5 second, and MPC sampling time 0.05 s.
+sim_rate = 100
+t_final = 5
+t_horizon = 0.5
+n_nodes = 10
+mpc_controller = ModelPredictiveControl(quad_params=quad_params, sim_rate = sim_rate, trajectory = CircularTraj(radius=2), t_final = t_final, t_horizon = t_horizon, n_nodes = n_nodes)
+l1_mpc_controller = L1_ModelPredictiveControl(quad_params=quad_params, sim_rate = sim_rate, trajectory = CircularTraj(radius=2), t_final = t_final, t_horizon = t_horizon, n_nodes = n_nodes)
 
 # An instance of the simulator can be generated as follows: 
 sim_instance = Environment(vehicle=Multirotor(quad_params,control_abstraction='cmd_motor_speeds'),           # vehicle object, must be specified.  # ! choose the appropriate control abstraction
@@ -69,8 +69,8 @@ sim_instance = Environment(vehicle=Multirotor(quad_params,control_abstraction='c
                            #controller=GeometricAdaptiveController(quad_params),        # ! Replace your Controller here 
                         #    controller=SE3Control(quad_params),
                         #     controller=GeoControl(quad_params),
-                              controller=L1_GeoControl(quad_params),
-                        #    controller = mpc_controller,
+                              # controller=L1_GeoControl(quad_params),
+                           controller = mpc_controller,
                            #controller=INDIAdaptiveController(quad_params),
                            trajectory=CircularTraj(radius=2),         # trajectory object, must be specified.
                            #wind_profile=SinusoidWind(),               # OPTIONAL: wind profile object, if none is supplied it will choose no wind. 

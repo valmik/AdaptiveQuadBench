@@ -7,6 +7,8 @@
     conda env create -f environment.yaml
     conda activate quadbench
     ```
+- you should install python interface for acados beforehead 
+    - [link](https://docs.acados.org/python_interface/index.html#installation)
     
 - Code structure should follow:
     - Controller

@@ -66,7 +66,7 @@ class QuadOptimizer:
 
 
         #load your own weight matrix Q and R for state and control input
-        q_cost = np.array([1,1,1,1,1,1,1,1,1,1,1,1,1])
+        q_cost = np.array([10,10,10,1,1,1,1,1,1,1,1,1,1])
         r_cost = np.array([1,1,1,1])
         self.T = t_horizon  # Time horizon
         self.N = n_nodes  # number of control nodes within horizon
@@ -390,10 +390,10 @@ class QuadOptimizer:
         sens_u = np.zeros((4,13))
         field = 'ex'
         stage = 0
-        for index in range(13):
-            self.acados_ocp_solver[use_model].eval_param_sens(index,stage,field)
-            temp = self.acados_ocp_solver[use_model].get(0,'sens_u')
-            sens_u[:,index] = temp
+        # for index in range(13):
+        #     self.acados_ocp_solver[use_model].eval_param_sens(index,stage,field)
+        #     temp = self.acados_ocp_solver[use_model].get(0,'sens_u')
+        #     sens_u[:,index] = temp
         
         
         # Get u, N is number of steps in MPC horizon
