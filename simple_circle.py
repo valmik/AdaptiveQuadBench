@@ -60,7 +60,8 @@ Instantiation
 # t_final = 5
 # t_horizon = 0.5
 # n_nodes = 10
-# mpc_controller = ModelPredictiveControl(quad_params=quad_params, sim_rate = sim_rate, trajectory = CircularTraj(radius=2), f_final = t_final, t_horizon = t_horizon, n_nodes = n_nodes)
+# mpc_controller = ModelPredictiveControl(quad_params=quad_params, sim_rate = sim_rate, trajectory = CircularTraj(radius=2), t_final = t_final, t_horizon = t_horizon, n_nodes = n_nodes)
+# l1_mpc_controller = L1_ModelPredictiveControl(quad_params=quad_params, sim_rate = sim_rate, trajectory = CircularTraj(radius=2), t_final = t_final, t_horizon = t_horizon, n_nodes = n_nodes)
 
 # An instance of the simulator can be generated as follows: 
 sim_instance = Environment(vehicle=Multirotor(quad_params,control_abstraction='cmd_motor_speeds'),           # vehicle object, must be specified.  # ! choose the appropriate control abstraction
