@@ -1,0 +1,3 @@
+[submodule "rotorpy"]
+	path = rotorpy
+	url = git@github.com:Dz298/rotorpy.git
