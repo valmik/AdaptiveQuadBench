@@ -8,7 +8,7 @@ Ewoud J. J. Smeur, Qiping Chu and Guido C. H. E. de Croon
 import numpy as np
 from scipy.spatial.transform import Rotation
 from controller.controller_template import MultirotorControlTemplate
-from controller.math import *
+from controller.quadrotor_util import *
 from controller.geometric_control import GeoControl
 
 
@@ -49,9 +49,7 @@ class INDIAdaptiveController(MultirotorControlTemplate):
         # Estimated alpha 
         meas_alpha = ((state['w'].reshape(-1,1) - self.last_meas_omega) / self.dt)
         # Estimated acceleration in body frame
-        T = np.array([0, 0, self.k_eta])[:, np.newaxis]*state['rotor_speeds']**2
-        T = np.sum(T, axis=1)
-        meas_acc = Rotation.from_quat(state['q']).as_matrix() @ (T / self.mass)
+        meas_acc = state['accel']
 
         # Import Geometric to get des Tau & THRUST
         high_level_control_input = self.high_level_control.update(t, state, flat_output)

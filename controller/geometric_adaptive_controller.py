@@ -8,7 +8,7 @@ Farhad A. Goodarzi, Daewon Lee, and Taeyoung Lee.
 import numpy as np
 from scipy.spatial.transform import Rotation
 from controller.controller_template import MultirotorControlTemplate
-from controller.math import *
+from controller.quadrotor_util import *
 class GeometricAdaptiveController(MultirotorControlTemplate):
     def __init__(self, vehicle_params, dt=0.01):
         """

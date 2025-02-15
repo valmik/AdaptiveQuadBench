@@ -166,15 +166,16 @@ def compute_cost(sim_result):
 
     x_des = sim_result['flat']['x']                                 # Desired position
     v_des = sim_result['flat']['x_dot']                             # Desired velocity
+    yaw_des = sim_result['flat']['yaw']                             # Desired yaw angle
     q_des = sim_result['control']['cmd_q']                          # Desired attitude
     rotor_speeds_des = sim_result['control']['cmd_motor_speeds']    # Desired rotor speeds 
 
-    # Write your cost function here. For example this is average position error over the trajectory. 
-    sim_cost = np.linalg.norm(x-x_des, axis=1).mean()
+    # Write your cost function here. RMSE of position error over the trajectory
+    sim_cost = np.sqrt(np.mean(np.sum((x-x_des)**2, axis=1)))
     # Heading error - convert to euler angles
-    euler_angles = Rotation.from_quat(q).as_euler('xyz', degrees=True)
-    euler_angles_des = Rotation.from_quat(q_des).as_euler('xyz', degrees=True)
-    heading_error = np.linalg.norm(euler_angles[:, 2] - euler_angles_des[:, 2])
+    euler_angles = Rotation.from_quat(q).as_euler('xyz', degrees=False)
+    heading_error = (np.abs(euler_angles[:, 2] - yaw_des)).mean()
+    heading_error = np.rad2deg(heading_error)
 
     return sim_cost, heading_error
 

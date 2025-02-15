@@ -436,11 +436,11 @@ class GeoControl(object):
         cmd_v = flat_output['x_dot']     # sheng: desired velocity (use the simplified version)
         
         control_input = {'cmd_motor_speeds':cmd_motor_speeds.reshape(4,),
-                         'cmd_motor_thrusts':cmd_rotor_thrusts,
+                         'cmd_motor_thrusts':cmd_rotor_thrusts.reshape(4,),
                          'cmd_thrust':cmd_thrust[0],
                          'cmd_moment':cmd_moment.reshape(3,),
-                         'cmd_q':cmd_q,
-                         'cmd_w':omega_des,
-                         'cmd_v':cmd_v
+                         'cmd_q':cmd_q.reshape(4,),
+                         'cmd_w':omega_des.reshape(3,),
+                         'cmd_v':cmd_v.reshape(3,)
                         }
         return control_input

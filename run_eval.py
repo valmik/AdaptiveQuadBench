@@ -5,6 +5,7 @@ from controller.geometric_control_l1 import L1_GeoControl
 from controller.indi_adaptive_controller import INDIAdaptiveController
 from controller.quadrotor_control_mpc import ModelPredictiveControl
 from controller.quadrotor_control_mpc_l1 import L1_ModelPredictiveControl
+from controller.Xadap_NN_control import Xadap_NN_control
 # Import your vehicle here
 from quad_param.Agilicious import quad_params
 
@@ -44,6 +45,8 @@ def switch_controller(controller_type,quad_params):
         return INDIAdaptiveController(quad_params)
     elif controller_type == 'l1mpc':
         return L1_ModelPredictiveControl(quad_params)
+    elif controller_type == 'xadap':
+        return Xadap_NN_control(quad_params)
     else:
         raise ValueError(f"Controller type {controller_type} not supported yet")
 
@@ -78,7 +81,7 @@ def create_randomized_controllers(controller_type, base_params, num_controllers,
         params = base_params.copy()
         # TODO
         # Add random perturbations to controller's parameter assumptions
-        params['mass'] *= (1 + np.random.normal(0, 0.1))  # 10% variation
+        # params['mass'] *= (1 + np.random.normal(0, 0.1))  # 10% variation
         params['Ixx'] *= (1 + np.random.normal(0, 0.1))
         params['Iyy'] *= (1 + np.random.normal(0, 0.1))
         params['Izz'] *= (1 + np.random.normal(0, 0.1))
@@ -178,19 +181,26 @@ def generate_summary(controller_type, controllers, vehicle, wind_profiles,
 
     # Print final summary
     df = pd.read_csv(output_csv_file)
-    # print average of the pos_tracking_error column
+    
+    # count df['pos_tracking_error'] < 5
+    success_rate = (df['pos_tracking_error'] < 5).sum() / len(df) * 100 
+    # successful filter
+    pos_tracking_error_success = df['pos_tracking_error'] < 5
+    
     print("--------------------------------")
     print(f"Controller: {controller_name}")
     print("--------------------------------")
-    print(f"Average pos_tracking_error: {df['pos_tracking_error'].mean():.2f} m")
-    print(f"Average heading_error: {df['heading_error'].mean():.2f} deg")
+    print(f"Success rate: {success_rate:.2f}%")
+    print(f"Average pos_tracking_error: {df['pos_tracking_error'][pos_tracking_error_success].mean():.2f} m")
+    print(f"Average heading_error: {df['heading_error'][pos_tracking_error_success].mean():.2f} deg")
     print("--------------------------------")
 
     return None
 
 def main():
     args = parse_args()
-    vehicle = Multirotor(quad_params)  # Single vehicle instance
+    vehicle = Multirotor(quad_params)
+    # TODO Trajectory class of ecllipse
     
     # Create controllers and wind profiles based on experiment type
     if args.experiment == 'wind':
@@ -209,7 +219,7 @@ def main():
         raise ValueError(f"Experiment type {args.experiment} not supported")
 
     generate_summary(args.controller, controllers, vehicle, wind_profiles, 
-                    args.num_trials, args.parallel, args.save_trials)
+                    args.num_trials, args.controller != 'xadap', args.save_trials)
 
 if __name__ == '__main__':
     main()
