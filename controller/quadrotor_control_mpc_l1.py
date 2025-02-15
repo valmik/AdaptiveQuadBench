@@ -1,12 +1,12 @@
 import numpy as np
 from collections import deque
 from scipy.spatial.transform import Rotation
+from controller.quadrotor_control_mpc import ModelPredictiveControl
 from controller.quadrotor_mpc import QuadMPC
 import numpy.linalg as la
 import math
 
-
-class L1_ModelPredictiveControl(object):
+class L1_ModelPredictiveControl(ModelPredictiveControl):
     """
 
     """
@@ -17,67 +17,8 @@ class L1_ModelPredictiveControl(object):
         Parameters:
             quad_params, dict with keys specified in rotorpy/vehicles
         """
-        self.quad_mpc = QuadMPC(quad_params=quad_params, trajectory=trajectory, t_final=t_final,
-                                t_horizon=t_horizon, n_nodes=n_nodes)
-
-        # compute optimation rate
-        self.optimization_dt = t_horizon / n_nodes
-        self.sim_dt = 1/sim_rate
-        self.sliding_index = 0 #determine current MPC reference
-
-        # Initilize controls
-        self.cmd_motor_thrusts = np.zeros((4,))
-
-        # Quadrotor physical parameters.
-        # Inertial parameters
-        self.mass            = quad_params['mass'] # kg
-        self.Ixx             = quad_params['Ixx']  # kg*m^2
-        self.Iyy             = quad_params['Iyy']  # kg*m^2
-        self.Izz             = quad_params['Izz']  # kg*m^2
-        self.Ixy             = quad_params['Ixy']  # kg*m^2
-        self.Ixz             = quad_params['Ixz']  # kg*m^2
-        self.Iyz             = quad_params['Iyz']  # kg*m^2
-
-        # Frame parameters
-        self.c_Dx            = quad_params['c_Dx']  # drag coeff, N/(m/s)**2
-        self.c_Dy            = quad_params['c_Dy']  # drag coeff, N/(m/s)**2
-        self.c_Dz            = quad_params['c_Dz']  # drag coeff, N/(m/s)**2
-
-        self.num_rotors      = quad_params['num_rotors']
-        self.rotor_pos       = quad_params['rotor_pos']
-        self.rotor_dir       = quad_params['rotor_directions']
-
-        # Rotor parameters    
-        self.rotor_speed_min = quad_params['rotor_speed_min'] # rad/s
-        self.rotor_speed_max = quad_params['rotor_speed_max'] # rad/s
-
-        self.k_eta           = quad_params['k_eta']     # thrust coeff, N/(rad/s)**2
-        self.k_m             = quad_params['k_m']       # yaw moment coeff, Nm/(rad/s)**2
-        self.k_d             = quad_params['k_d']       # rotor drag coeff, N/(m/s)
-        self.k_z             = quad_params['k_z']       # induced inflow coeff N/(m/s)
-        self.k_flap          = quad_params['k_flap']    # Flapping moment coefficient Nm/(m/s)
-
-        # Motor parameters
-        self.tau_m           = quad_params['tau_m']     # motor reponse time, seconds
-
-        # You may define any additional constants you like including control gains.
-        self.inertia = np.array([[self.Ixx, self.Ixy, self.Ixz],
-                                 [self.Ixy, self.Iyy, self.Iyz],
-                                 [self.Ixz, self.Iyz, self.Izz]]) # kg*m^2
-        self.J = self.inertia # inertial matrix
-        self.g = 9.81 # m/s^2
+        super().__init__(quad_params, sim_rate, trajectory, t_final, t_horizon, n_nodes)
         
-        # Linear map from individual rotor forces to scalar thrust and vector
-        # moment applied to the vehicle.
-        k = self.k_m/self.k_eta  # Ratio of torque to thrust coefficient. 
-
-        # Below is an automated generation of the control allocator matrix. It assumes that all thrust vectors are aligned
-        # with the z axis and that the "sign" of each rotor yaw moment alternates starting with positive for r1. 'TM' = "thrust and moments"
-        self.f_to_TM = np.vstack((np.ones((1,self.num_rotors)),
-                                  np.hstack([np.cross(self.rotor_pos[key],np.array([0,0,1])).reshape(-1,1)[0:2] for key in self.rotor_pos]), 
-                                 (k * self.rotor_dir).reshape(1,-1)))
-        self.TM_to_f = np.linalg.inv(self.f_to_TM)
-
         """ L1-related parameters """
         self.As_v = -1 # parameter for L1
         self.As_omega = -1 # parameter for L1
@@ -88,7 +29,7 @@ class L1_ModelPredictiveControl(object):
         self.ctoffq1Moment = 50 # cutoff frequency for moment channels LPF1 (rad/s)
         self.ctoffq2Moment = 50 # cutoff frequency for moment channels LPF2 (rad/s)
 
-        self.L1_params = (self.As_v, self.As_omega, self.dt_L1, self.ctoffq1Thrust, self.ctoffq1Moment, self.ctoffq2Moment, self.mass, self.g, self.J )
+        self.L1_params = (self.As_v, self.As_omega, self.dt_L1, self.ctoffq1Thrust, self.ctoffq1Moment, self.ctoffq2Moment, self.mass, self.g, self.inertia )
 
         # self.kx = 16*self.m*np.ones((3,)) # position gains
         # self.kv = 5.6*self.m*np.ones((3,)) # velocity gains
@@ -249,27 +190,10 @@ class L1_ModelPredictiveControl(object):
         R = Rotation.from_quat(state['q']).as_matrix()     
         W = state['w'].reshape(3)
 
-        # unpack state used for MPC
-        task_index = None
-        state = self.unpack_state(state)
+        baseline_control_input = super().update(t, state, flat_output)
+        f = baseline_control_input['cmd_thrust']
+        M = baseline_control_input['cmd_moment']
 
-
-        # Optimization loop
-        index, _ = divmod(t, self.optimization_dt)
-        if int(index) == self.sliding_index:
-            self.quad_mpc.set_reference(self.sliding_index)
-            w_opt,x_opt,sens_u = self.quad_mpc.run_optimization(initial_state=state, task_index=task_index)
-            self.cmd_motor_thrusts = w_opt[:4]   # get controls
-            # cmd_motor_thrusts = self.cmd_motor_thrusts
-            # cmd_motor_speeds = cmd_motor_thrusts / self.k_eta
-            # cmd_motor_speeds = np.sign(cmd_motor_speeds) * np.sqrt(np.abs(cmd_motor_speeds))
-            self.sliding_index += 1             # update slidng index
-
-        # Compute motor speeds. Avoid taking square root of negative numbers.
-
-        TM = self.f_to_TM @ self.cmd_motor_thrusts
-        f = TM[0]
-        M = TM[1:4]
         f_l1, M_l1, sigma_m_hat = self.L1AC(R,W,x,v,f,M)
 
         u_new = np.vstack((f_l1.reshape(1,1),M_l1.reshape(3,1)))
@@ -289,17 +213,3 @@ class L1_ModelPredictiveControl(object):
         
 
         return control_input
-    
-    def unpack_state(self, state):
-        """
-        This function unpacks the state and returns an array [x, v, quaternion(wxyz), w] of shape (13,)
-        """
-        x = state['x']
-        v = state['v']
-        q_ = state['q']
-        w = state['w']
-        
-        # Note: MPC uses quaternion as wxyz instead of xyzw used by the SIMULATOR
-        q = np.array([q_[3], q_[0], q_[1], q_[2]])
-        return np.concatenate([x,v,q,w])
-    

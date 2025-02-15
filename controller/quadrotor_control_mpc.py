@@ -5,7 +5,8 @@ from scipy.spatial.transform import Rotation
 from rotorpy.trajectories.hover_traj  import HoverTraj
 from controller.quadrotor_mpc import QuadMPC
 from controller.quadrotor_util import skew_symmetric, v_dot_q, quaternion_inverse
-class ModelPredictiveControl(object):
+from controller.controller_template import MultirotorControlTemplate
+class ModelPredictiveControl(MultirotorControlTemplate):
     """
 
     """
@@ -16,6 +17,7 @@ class ModelPredictiveControl(object):
         Parameters:
             quad_params, dict with keys specified in rotorpy/vehicles
         """
+        super().__init__(quad_params)
         self.quad_mpc = QuadMPC(quad_params=quad_params, trajectory=trajectory, t_final=t_final,
                                 t_horizon=t_horizon, n_nodes=n_nodes)
 
@@ -27,15 +29,6 @@ class ModelPredictiveControl(object):
         # Initilize controls
         self.cmd_motor_forces = np.zeros((4,))
 
-        # Load quad params
-        self.num_rotors      = quad_params['num_rotors']
-        self.rotor_pos       = quad_params['rotor_pos']
-        self.k_eta           = quad_params['k_eta']     # thrust coeff, N/(rad/s)**2
-        self.k_m             = quad_params['k_m']       # yaw moment coeff, Nm/(rad/s)**2
-        k = self.k_m/self.k_eta
-        self.f_to_TM = np.vstack((np.ones((1,self.num_rotors)),np.hstack([np.cross(self.rotor_pos[key],np.array([0,0,1])).reshape(-1,1)[0:2] for key in self.rotor_pos]), np.array([k*(-1)**i for i in range(self.num_rotors)]).reshape(1,-1)))
-        self.TM_to_f = np.linalg.inv(self.f_to_TM)
-        
     def update(self, t, state, flat_output):
         """
         This function receives the current time, true state, and desired flat

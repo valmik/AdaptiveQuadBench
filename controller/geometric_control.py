@@ -1,10 +1,11 @@
 import numpy as np
 from scipy.spatial.transform import Rotation
+from controller.controller_template import MultirotorControlTemplate
 
 #import jax
 # import jax.numpy as np
 
-class GeoControl(object):
+class GeoControl(MultirotorControlTemplate):
     """
     implementing the original geometric control
     """
@@ -13,52 +14,7 @@ class GeoControl(object):
         Parameters:
             quad_params, dict with keys specified in rotorpy/vehicles
         """
-
-        # Quadrotor physical parameters.
-        # Inertial parameters
-        self.mass            = quad_params['mass'] # kg
-        self.Ixx             = quad_params['Ixx']  # kg*m^2
-        self.Iyy             = quad_params['Iyy']  # kg*m^2
-        self.Izz             = quad_params['Izz']  # kg*m^2
-        self.Ixy             = quad_params['Ixy']  # kg*m^2
-        self.Ixz             = quad_params['Ixz']  # kg*m^2
-        self.Iyz             = quad_params['Iyz']  # kg*m^2
-
-        # Frame parameters
-        self.c_Dx            = quad_params['c_Dx']  # drag coeff, N/(m/s)**2
-        self.c_Dy            = quad_params['c_Dy']  # drag coeff, N/(m/s)**2
-        self.c_Dz            = quad_params['c_Dz']  # drag coeff, N/(m/s)**2
-
-        self.num_rotors      = quad_params['num_rotors']
-        self.rotor_pos       = quad_params['rotor_pos']
-        self.rotor_dir       = quad_params['rotor_directions']
-
-        # Rotor parameters    
-        self.rotor_speed_min = quad_params['rotor_speed_min'] # rad/s
-        self.rotor_speed_max = quad_params['rotor_speed_max'] # rad/s
-
-        self.k_eta           = quad_params['k_eta']     # thrust coeff, N/(rad/s)**2
-        self.k_m             = quad_params['k_m']       # yaw moment coeff, Nm/(rad/s)**2
-        self.k_d             = quad_params['k_d']       # rotor drag coeff, N/(m/s)
-        self.k_z             = quad_params['k_z']       # induced inflow coeff N/(m/s)
-        self.k_flap          = quad_params['k_flap']    # Flapping moment coefficient Nm/(m/s)
-
-        # Motor parameters
-        self.tau_m           = quad_params['tau_m']     # motor reponse time, seconds
-
-        # You may define any additional constants you like including control gains.
-        self.inertia = np.array([[self.Ixx, self.Ixy, self.Ixz],
-                                 [self.Ixy, self.Iyy, self.Iyz],
-                                 [self.Ixz, self.Iyz, self.Izz]]) # kg*m^2
-        self.g = 9.81 # m/s^2
-
-        # # Gains  # sheng, this will be updated
-        # self.kp_pos = np.array([6.5,6.5,15])
-        # self.kd_pos = np.array([4.0, 4.0, 9])
-        # self.kp_att = 544
-        # self.kd_att = 46.64
-        # self.kp_vel = 0.1*self.kp_pos   # P gain for velocity controller (only used when the control abstraction is cmd_vel)
-        
+        super().__init__(quad_params)
         # new gains for geometric control
         self.k = {
             'x': 14*np.ones(3).reshape(3,1),
@@ -86,18 +42,6 @@ class GeoControl(object):
             'W': 0.03*np.ones(3).reshape(3,1),
         }
         
-        # Q2s real params: 14 15 15 1.50 0.90 1.10 0.55 0.35 0.15 0.04 0.03 0.01
-        
-        # Linear map from individual rotor forces to scalar thrust and vector
-        # moment applied to the vehicle.
-        k = self.k_m/self.k_eta  # Ratio of torque to thrust coefficient. 
-
-        # Below is an automated generation of the control allocator matrix. It assumes that all thrust vectors are aligned
-        # with the z axis and that the "sign" of each rotor yaw moment alternates starting with positive for r1. 'TM' = "thrust and moments"
-        self.f_to_TM = np.vstack((np.ones((1,self.num_rotors)),
-                                  np.hstack([np.cross(self.rotor_pos[key],np.array([0,0,1])).reshape(-1,1)[0:2] for key in self.rotor_pos]), 
-                                 (k * self.rotor_dir).reshape(1,-1)))
-        self.TM_to_f = np.linalg.inv(self.f_to_TM)
 
     def update_ref(self, t, flat_output):
         """
@@ -263,7 +207,7 @@ class GeoControl(object):
         
         # note: rotoypy seems to use ENU
         
-        def geometric_controller(self, state, flat_output):
+        def geometric_controller(self, t, state, flat_output):
             # split the state
             x = state['x'].reshape(3,1)
             v = state['v'].reshape(3,1)
@@ -384,44 +328,8 @@ class GeoControl(object):
             M = - k['R'] * eR - k['W'] * eW + wedge(W) @ (J @ W) - J @ (wedge(W) @ np.transpose(R) @ Rd @ Wd - np.transpose(R) @ Rd @ Wddot)
             return M, eR, eW
 
-        # the original code starts from below
-        # # Get the desired force vector.
-        # pos_err  = state['x'] - flat_output['x']
-        # dpos_err = state['v'] - flat_output['x_dot']
-        # F_des = self.mass * (- self.kp_pos*pos_err
-        #                      - self.kd_pos*dpos_err
-        #                      + flat_output['x_ddot']
-        #                      + np.array([0, 0, self.g]))
-
-        # # Desired thrust is force projects onto b3 axis.
-        # R = Rotation.from_quat(state['q']).as_matrix()
-        # b3 = R @ np.array([0, 0, 1])
-        # u1 = np.dot(F_des, b3)
-
-        # # Desired orientation to obtain force vector.
-        # b3_des = normalize(F_des)
-        # yaw_des = flat_output['yaw']
-        # c1_des = np.array([np.cos(yaw_des), np.sin(yaw_des), 0])
-        # b2_des = normalize(np.cross(b3_des, c1_des))
-        # b1_des = np.cross(b2_des, b3_des)
-        # R_des = np.stack([b1_des, b2_des, b3_des]).T
-
-        # # Orientation error.
-        # S_err = 0.5 * (R_des.T @ R - R.T @ R_des) # sheng: this is the same as we do
-        # att_err = vee_map(S_err)
-
-        # # Angular velocity error (this is oversimplified).
-        # w_des = np.array([0, 0, flat_output['yaw_dot']]) # sheng: this is indeed oversimplified
-        # w_err = state['w'] - w_des
-
-        # # Desired torque, in units N-m.
-        # u2 = self.inertia @ (-self.kp_att*att_err - self.kd_att*w_err) + np.cross(state['w'], self.inertia@state['w'])  # Includes compensation for wxJw component
-
-        # # Compute command body rates by doing PD on the attitude error. 
-        # cmd_w = -self.kp_att*att_err - self.kd_att*w_err
-
         # Compute motor speeds. Avoid taking square root of negative numbers.
-        u, error, R_des, omega_des = geometric_controller(self, state, flat_output)
+        u, error, R_des, omega_des = geometric_controller(self, t, state, flat_output)
         
         TM = np.array(u)
         cmd_rotor_thrusts = self.TM_to_f @ TM
