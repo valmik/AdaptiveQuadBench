@@ -56,23 +56,25 @@ import os                           # For path generation
 Instantiation
 """
 #MPC param. Total horizon = 5 seconds, MPC horizon is 0.5 second, and MPC sampling time 0.05 s.
-# sim_rate = 100
-# t_final = 5
-# t_horizon = 0.5
-# n_nodes = 10
-# mpc_controller = ModelPredictiveControl(quad_params=quad_params, sim_rate = sim_rate, trajectory = CircularTraj(radius=2), t_final = t_final, t_horizon = t_horizon, n_nodes = n_nodes)
-# l1_mpc_controller = L1_ModelPredictiveControl(quad_params=quad_params, sim_rate = sim_rate, trajectory = CircularTraj(radius=2), t_final = t_final, t_horizon = t_horizon, n_nodes = n_nodes)
-
+sim_rate = 100
+t_final = 5
+t_horizon = 0.5
+n_nodes = 10
+mpc_controller = ModelPredictiveControl(quad_params=quad_params)
+l1_mpc_controller = L1_ModelPredictiveControl(quad_params=quad_params)
+mpc_controller.update_trajectory(CircularTraj(radius=2))
+# l1_mpc_controller.update_trajectory(CircularTraj(radius=2))
 # An instance of the simulator can be generated as follows: 
 sim_instance = Environment(vehicle=Multirotor(quad_params,control_abstraction='cmd_motor_speeds'),           # vehicle object, must be specified.  # ! choose the appropriate control abstraction
                            # please refer to multirotor.py file to check your control_abstraction.
-                           #controller=GeometricAdaptiveController(quad_params),        # ! Replace your Controller here 
+                           controller=GeometricAdaptiveController(quad_params),        # ! Replace your Controller here 
                         #    controller=SE3Control(quad_params),
                         #     controller=GeoControl(quad_params),
                               # controller=L1_GeoControl(quad_params),
                         #    controller = mpc_controller,
+                        # controller = l1_mpc_controller,
                         #    controller=INDIAdaptiveController(quad_params),
-                           controller = Xadap_NN_control(quad_params),
+                        #    controller = Xadap_NN_control(quad_params),
                         #    trajectory=HoverTraj(),         # trajectory object, must be specified.
                         trajectory=CircularTraj(radius=2),
                            wind_profile=SinusoidWind(),               # OPTIONAL: wind profile object, if none is supplied it will choose no wind. 

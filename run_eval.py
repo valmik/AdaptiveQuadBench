@@ -6,8 +6,10 @@ from controller.indi_adaptive_controller import INDIAdaptiveController
 from controller.quadrotor_control_mpc import ModelPredictiveControl
 from controller.quadrotor_control_mpc_l1 import L1_ModelPredictiveControl
 from controller.Xadap_NN_control import Xadap_NN_control
+from rotorpy.controllers.quadrotor_control import SE3Control
 # Import your vehicle here
 from quad_param.Agilicious import quad_params
+from rotorpy.trajectories.random_motion_prim_traj import RapidTrajectory
 
 from rotorpy.vehicles.multirotor import Multirotor
 from rotorpy.world import World
@@ -45,10 +47,39 @@ def switch_controller(controller_type,quad_params):
         return INDIAdaptiveController(quad_params)
     elif controller_type == 'l1mpc':
         return L1_ModelPredictiveControl(quad_params)
+    elif controller_type == 'mpc':
+        return ModelPredictiveControl(quad_params)
     elif controller_type == 'xadap':
         return Xadap_NN_control(quad_params)
     else:
-        raise ValueError(f"Controller type {controller_type} not supported yet")
+        print(f"Controller type {controller_type} not supported yet. We use default SE3Control")
+        return SE3Control(quad_params)
+
+def create_randomized_trajectories(num_trials, seed=None):
+    """Pre-generate multiple trajectories"""
+    if seed is not None:
+        np.random.seed(seed)
+    
+    # init pos, vel, acc
+    pos0 = np.array([0, 0, 0])
+    vel0 = np.array([0, 0, 0])
+    acc0 = np.array([0, 0, 0])
+    gravity = np.array([0, 0, -9.81])
+    Tf = 5
+
+    trajectories = []
+    for i in range(num_trials): # TODO random according to a config yaml file
+        trajectory = RapidTrajectory(pos0, vel0, acc0, gravity)
+        posf = np.random.uniform(-10, 10, size=3)
+        velf = np.random.uniform(-5, 5, size=3)
+        accf = np.random.uniform(-2, 2, size=3)
+        trajectory.set_goal_position(posf)
+        trajectory.set_goal_velocity(velf)
+        trajectory.set_goal_acceleration(accf)
+        # Run the algorithm, and generate the trajectory.
+        trajectory.generate(Tf) 
+        trajectories.append(trajectory)
+    return trajectories
 
 def create_wind_profiles(num_profiles, seed=None):
     """Pre-generate multiple wind profiles"""
@@ -90,7 +121,7 @@ def create_randomized_controllers(controller_type, base_params, num_controllers,
     
     return controllers
 
-def generate_summary(controller_type, controllers, vehicle, wind_profiles,
+def generate_summary(controller_type, controllers, vehicle, wind_profiles, trajectories,
                       num_simulations=100, parallel_bool=True, save_trials=False):
     """
     Main function for generating data.
@@ -98,6 +129,7 @@ def generate_summary(controller_type, controllers, vehicle, wind_profiles,
         controller: The controller to use.
         vehicle: The vehicle to use.
         wind_profile: The wind profile to use.
+        trajectories: The trajectories to use.
         num_simulations: The number of simulations to run.
         parallel_bool: If True, runs the simulations in parallel. If False, runs the simulations sequentially.
         save_trials: If True, saves each trial data to a separate .csv file. Uses more memory, but allows you to see the results of each trial at a later date.
@@ -106,17 +138,6 @@ def generate_summary(controller_type, controllers, vehicle, wind_profiles,
     """
 
     world_size = 10
-    num_waypoints = 4
-    vavg = 2
-    random_yaw = False
-    yaw_min = -0.85*np.pi
-    yaw_max = 0.85*np.pi
-
-    world_buffer = 2
-    min_distance = 1
-    max_distance = min_distance+3
-    start_waypoint = None               # If you want to start at a specific waypoint, specify it using [xstart, ystart, zstart]
-    end_waypoint = None                 # If you want to end at a specific waypoint, specify it using [xend, yend, zend]
 
     # convert controller to string
     controller_name = str(controller_type)
@@ -157,22 +178,19 @@ def generate_summary(controller_type, controllers, vehicle, wind_profiles,
     with open(output_csv_file, 'w', newline='') as file:
         writer = csv.writer(file)
         # This depends on the number of waypoints and the order of the polynomial. Currently pos is 7th order and yaw is 7th order.
-        writer.writerow(['traj_number'] + ['pos_tracking_error'] + ['heading_error'] 
-                + ['x_poly_seg_{}_coeff_{}'.format(i,j) for i in range(num_waypoints-1) for j in range(8)]
-                + ['y_poly_seg_{}_coeff_{}'.format(i,j) for i in range(num_waypoints-1) for j in range(8)]
-                + ['z_poly_seg_{}_coeff_{}'.format(i,j) for i in range(num_waypoints-1) for j in range(8)]
-                + ['yaw_poly_seg_{}_coeff_{}'.format(i,j) for i in range(num_waypoints-1) for j in range(8)])  
+        writer.writerow(['traj_number'] + ['pos_tracking_error'] + ['heading_error'] )
+                # + ['x_poly_seg_{}_coeff_{}'.format(i,j) for i in range(num_waypoints-1) for j in range(8)]
+                # + ['y_poly_seg_{}_coeff_{}'.format(i,j) for i in range(num_waypoints-1) for j in range(8)]
+                # + ['z_poly_seg_{}_coeff_{}'.format(i,j) for i in range(num_waypoints-1) for j in range(8)]
+                # + ['yaw_poly_seg_{}_coeff_{}'.format(i,j) for i in range(num_waypoints-1) for j in range(8)])  
 
     # Create world
     world = World.empty([-world_size/2, world_size/2, -world_size/2, world_size/2, -world_size/2, world_size/2])
 
     # Generate the data
     start_time = time.time()
-    generate_data(output_csv_file, world, vehicle, controllers, wind_profiles,
-                  num_simulations, num_waypoints, vavg, 
-                  random_yaw, yaw_min, yaw_max, 
-                  world_buffer, min_distance, max_distance, 
-                  start_waypoint, end_waypoint,
+    generate_data(output_csv_file, world, vehicle, controllers, wind_profiles, trajectories,
+                  num_simulations,
                   parallel=parallel_bool,
                   save_individual_trials=save_trials,
                   save_trial_path=savepath)
@@ -200,7 +218,7 @@ def generate_summary(controller_type, controllers, vehicle, wind_profiles,
 def main():
     args = parse_args()
     vehicle = Multirotor(quad_params)
-    # TODO Trajectory class of ecllipse
+    trajectories = create_randomized_trajectories(args.num_trials, seed=args.seed)
     
     # Create controllers and wind profiles based on experiment type
     if args.experiment == 'wind':
@@ -217,9 +235,12 @@ def main():
     
     else:
         raise ValueError(f"Experiment type {args.experiment} not supported")
-
-    generate_summary(args.controller, controllers, vehicle, wind_profiles, 
-                    args.num_trials, args.controller != 'xadap', args.save_trials)
+    
+    Parallel = args.controller != 'xadap'
+    Parallel = False
+    generate_summary(args.controller, controllers, vehicle, wind_profiles, trajectories,
+                    args.num_trials, Parallel, args.save_trials)
+ 
 
 if __name__ == '__main__':
     main()
