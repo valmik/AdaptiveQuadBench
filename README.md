@@ -4,6 +4,9 @@
 
 - Installation guide (for now, Feb-5-2025), to install original rotorpy to a new conda environment
     ```
+    git clone git@github.com:Dz298/AdaptiveQuadBench.git
+    cd AdaptiveQuadBench
+    git submodule update --init --recursive
     conda env create -f environment.yaml
     conda activate quadbench
     ```
