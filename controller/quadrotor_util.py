@@ -8,28 +8,10 @@ import matplotlib.pyplot as plt
 
 
 """
-Some useful util functions used for MPC and online learning
+Some useful util functions used
 
 """
 
-
-
-def normalize(x):
-    """Return normalized vector."""
-    return x / np.linalg.norm(x)
-
-
-def vee(R):
-    """Convert skew-symmetric matrix to vector"""
-    return np.array([R[2,1] - R[1,2], 
-                    R[0,2] - R[2,0], 
-                    R[1,0] - R[0,1]]) / 2
-
-def skew(v):
-    """Convert vector to skew symmetric matrix"""
-    return np.array([[0, -v[2], v[1]],
-                    [v[2], 0, -v[0]],
-                    [-v[1], v[0], 0]])
 
 def safe_mkdir_recursive(directory, overwrite=False):
     if not os.path.exists(directory):

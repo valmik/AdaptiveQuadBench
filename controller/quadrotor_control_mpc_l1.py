@@ -3,6 +3,8 @@ from collections import deque
 from scipy.spatial.transform import Rotation
 from controller.quadrotor_control_mpc import ModelPredictiveControl
 from controller.quadrotor_mpc import QuadMPC
+from rotorpy.trajectories.hover_traj  import HoverTraj
+from rotorpy.trajectories.circular_traj  import CircularTraj
 import numpy.linalg as la
 import math
 
@@ -10,14 +12,14 @@ class L1_ModelPredictiveControl(ModelPredictiveControl):
     """
 
     """
-    def __init__(self, quad_params, sim_rate, 
-                 trajectory, t_final, t_horizon, n_nodes 
+    def __init__(self, quad_params, trajectory=HoverTraj(), sim_rate=100, 
+                 t_final=5, t_horizon=0.5, n_nodes=10 
                  ):
         """
         Parameters:
             quad_params, dict with keys specified in rotorpy/vehicles
         """
-        super().__init__(quad_params, sim_rate, trajectory, t_final, t_horizon, n_nodes)
+        super().__init__(quad_params, trajectory, sim_rate, t_final, t_horizon, n_nodes)
         
         """ L1-related parameters """
         self.As_v = -1 # parameter for L1

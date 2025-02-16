@@ -178,7 +178,7 @@ class QuadOptimizer:
 
             # Compile acados OCP solver if necessary
             json_file = os.path.join(self.acados_models_dir, key_model.name + '_acados_ocp.json')
-            self.acados_ocp_solver[key] = AcadosOcpSolver(ocp, json_file=json_file)
+            self.acados_ocp_solver[key] = AcadosOcpSolver(ocp, json_file=json_file,verbose=False)
 
     def clear_acados_model(self):
         """

@@ -349,6 +349,7 @@ class GeoControl(MultirotorControlTemplate):
                          'cmd_moment':cmd_moment.reshape(3,),
                          'cmd_q':cmd_q.reshape(4,),
                          'cmd_w':omega_des.reshape(3,),
-                         'cmd_v':cmd_v.reshape(3,)
+                         'cmd_v':cmd_v.reshape(3,),
+                         'error':error,
                         }
         return control_input

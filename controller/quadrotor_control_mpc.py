@@ -3,6 +3,7 @@ from time import time
 from collections import deque
 from scipy.spatial.transform import Rotation
 from rotorpy.trajectories.hover_traj  import HoverTraj
+from rotorpy.trajectories.circular_traj  import CircularTraj
 from controller.quadrotor_mpc import QuadMPC
 from controller.quadrotor_util import skew_symmetric, v_dot_q, quaternion_inverse
 from controller.controller_template import MultirotorControlTemplate
@@ -10,24 +11,32 @@ class ModelPredictiveControl(MultirotorControlTemplate):
     """
 
     """
-    def __init__(self, quad_params, sim_rate, 
-                 trajectory, t_final, t_horizon, n_nodes 
+    def __init__(self, quad_params, trajectory=CircularTraj(radius=2), sim_rate=100, 
+                 t_final=5, t_horizon=0.5, n_nodes=10 
                  ):
         """
         Parameters:
             quad_params, dict with keys specified in rotorpy/vehicles
         """
         super().__init__(quad_params)
-        self.quad_mpc = QuadMPC(quad_params=quad_params, trajectory=trajectory, t_final=t_final,
-                                t_horizon=t_horizon, n_nodes=n_nodes)
+        self.quad_params = quad_params
+        self.quad_mpc = QuadMPC(quad_params=quad_params, trajectory=trajectory, t_final=t_final, t_horizon=t_horizon, n_nodes=n_nodes)
+        
+        self.t_final = t_final
+        self.t_horizon = t_horizon
+        self.n_nodes = n_nodes
 
         # compute optimation rate
         self.optimization_dt = t_horizon / n_nodes
-        self.sim_dt = 1/sim_rate
+        self.sim_dt = 1.0 / sim_rate
         self.sliding_index = 0 #determine current MPC reference
 
         # Initilize controls
         self.cmd_motor_forces = np.zeros((4,))
+
+    def update_trajectory(self, trajectory):
+        self.quad_mpc = QuadMPC(quad_params=self.quad_params, trajectory=trajectory, t_final=self.t_final,
+                                t_horizon=self.t_horizon, n_nodes=self.n_nodes)
 
     def update(self, t, state, flat_output):
         """
