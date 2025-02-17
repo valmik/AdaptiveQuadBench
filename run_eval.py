@@ -25,6 +25,7 @@ import numpy as np
 import pandas as pd
 
 import argparse
+from pathlib import Path
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -205,15 +206,65 @@ def generate_summary(controller_type, controllers, vehicle, wind_profiles, traje
     # successful filter
     pos_tracking_error_success = df['pos_tracking_error'] < 5
     
+    avg_pos_error = df['pos_tracking_error'][pos_tracking_error_success].mean()
+    avg_heading_error = df['heading_error'][pos_tracking_error_success].mean()
+    
     print("--------------------------------")
     print(f"Controller: {controller_name}")
     print("--------------------------------")
     print(f"Success rate: {success_rate:.2f}%")
-    print(f"Average pos_tracking_error: {df['pos_tracking_error'][pos_tracking_error_success].mean():.2f} m")
-    print(f"Average heading_error: {df['heading_error'][pos_tracking_error_success].mean():.2f} deg")
+    print(f"Average pos_tracking_error: {avg_pos_error:.2f} m")
+    print(f"Average heading_error: {avg_heading_error:.2f} deg")
     print("--------------------------------")
 
+    # Update stats CSV
+    update_stats_csv(
+        controller_name,
+        success_rate,
+        avg_pos_error,
+        avg_heading_error
+    )
+
     return None
+
+def update_stats_csv(controller_name, success_rate, avg_pos_error, avg_heading_error, stats_file='data/controller_stats.csv'):
+    """
+    Updates or adds controller statistics to the CSV file.
+    If controller exists, overwrites its stats. If not, adds a new row.
+    """
+    import pandas as pd
+    from pathlib import Path
+
+    # Create stats directory if it doesn't exist
+    Path(stats_file).parent.mkdir(parents=True, exist_ok=True)
+
+    # Create DataFrame with new stats
+    new_stats = pd.DataFrame({
+        'controller': [controller_name],
+        'success_rate': [success_rate],
+        'avg_position_error': [avg_pos_error],
+        'avg_heading_error': [avg_heading_error],
+        'last_updated': [pd.Timestamp.now()]
+    })
+
+    try:
+        # Try to read existing stats
+        if Path(stats_file).exists():
+            stats_df = pd.read_csv(stats_file)
+            # Remove old entry for this controller if it exists
+            stats_df = stats_df[stats_df['controller'] != controller_name]
+            # Append new stats
+            stats_df = pd.concat([stats_df, new_stats], ignore_index=True)
+        else:
+            stats_df = new_stats
+
+        # Save updated stats
+        stats_df.to_csv(stats_file, index=False)
+        print(f"\nUpdated statistics in {stats_file}")
+        print(stats_df.to_string(index=False))
+
+    except Exception as e:
+        print(f"Error updating stats file: {e}")
 
 def main():
     args = parse_args()
@@ -237,7 +288,7 @@ def main():
         raise ValueError(f"Experiment type {args.experiment} not supported")
     
     Parallel = args.controller != 'xadap'
-    Parallel = False
+    # Parallel = False
     generate_summary(args.controller, controllers, vehicle, wind_profiles, trajectories,
                     args.num_trials, Parallel, args.save_trials)
  
