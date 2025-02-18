@@ -56,6 +56,7 @@ def write_to_csv(output_file, row):
     return None
 
 def single_traj_instance(world, vehicle, controllers, wind_profiles, trajectories,
+                         ext_force=None, ext_torque=None,
                             seed=None, save_trial=False, save_trial_path=None):
     """
     Generate a single instance of the simulator with a trajectory. 
@@ -65,6 +66,8 @@ def single_traj_instance(world, vehicle, controllers, wind_profiles, trajectorie
         controllers: The controllers to use.
         wind_profiles: The wind profiles to use.
         trajectories: The trajectories to use.
+        ext_force: External force applied to the vehicle
+        ext_torque: External torque applied to the vehicle
         seed: The seed for the random number generator. If None, uses numpy's random number generator.
         save_trial: If True, saves the trial data to a .csv file.
         save_trial_path: The path to save the trial data to. If None, saves to the current directory.
@@ -84,6 +87,10 @@ def single_traj_instance(world, vehicle, controllers, wind_profiles, trajectorie
     # check if controller is MPC or L1 MPC
     wind_profile = wind_profiles[traj_id % len(wind_profiles)]
     traj = trajectories[traj_id % len(trajectories)]
+    if ext_force is not None:
+        ext_force = ext_force[traj_id % len(ext_force)]
+    if ext_torque is not None:
+        ext_torque = ext_torque[traj_id % len(ext_torque)]
 
     # check if the class belongs to a MPC
     if 'ModelPredictiveControl' in str(controller.__class__):
@@ -92,7 +99,8 @@ def single_traj_instance(world, vehicle, controllers, wind_profiles, trajectorie
     # Now create an instance of the simulator and run it. 
     sim_instance = Environment(vehicle=vehicle, controller=controller, 
                              wind_profile=wind_profile,
-                             trajectory=traj, sim_rate=100)
+                             trajectory=traj, sim_rate=100,
+                             ext_force=ext_force, ext_torque=ext_torque)
 
     # Set the initial state to the first waypoint at hover. 
     x0 = {'x': np.array([0, 0, 0]),
@@ -130,10 +138,8 @@ def single_traj_instance(world, vehicle, controllers, wind_profiles, trajectorie
     return summary_output
 
 def generate_data(output_csv_file, world, vehicle, controllers, wind_profiles, trajectories,
-                  num_simulations,
-                  parallel=True,
-                  save_individual_trials=False,
-                  save_trial_path=None):
+                  num_simulations, ext_force=None, ext_torque=None, parallel=True,
+                  save_individual_trials=False, save_trial_path=None):
     """
     Generates data.
     Inputs:
@@ -144,6 +150,8 @@ def generate_data(output_csv_file, world, vehicle, controllers, wind_profiles, t
         wind_profile: Instance of a wind profile class.
         trajectories: The trajectories to use.
         num_simulations: The number of simulations to run.
+        ext_force: External force applied to the vehicle
+        ext_torque: External torque applied to the vehicle
         parallel: If True, runs the simulations in parallel. If False, runs them sequentially.
         save_individual_trials: If True, saves the trial data to a .csv file.
         save_trial_path: The path to save the trial data to. If None, saves to the current directory.
@@ -155,6 +163,7 @@ def generate_data(output_csv_file, world, vehicle, controllers, wind_profiles, t
     if not parallel:
         for i in tqdm(range(num_simulations), desc="Running simulations (sequentially)..."):
             result = single_traj_instance(world, vehicle, controllers, wind_profiles, trajectories,
+                                            ext_force=ext_force, ext_torque=ext_torque,
                                             seed=i, save_trial=save_individual_trials, 
                                             save_trial_path=save_trial_path)
             write_to_csv(output_csv_file, result)
@@ -192,6 +201,7 @@ def generate_data(output_csv_file, world, vehicle, controllers, wind_profiles, t
         for i in range(num_simulations):
             pool.apply_async(single_traj_instance, 
                            args=(world, vehicle, controllers, wind_profiles, trajectories,
+                                 ext_force, ext_torque,
                                  i, save_individual_trials, save_trial_path),
                            callback=update_results)
             

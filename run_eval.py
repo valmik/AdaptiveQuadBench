@@ -26,15 +26,20 @@ import pandas as pd
 
 import argparse
 from pathlib import Path
+from randomization_config import RandomizationConfig, ExperimentType
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--controller', type=str, default='geo', help='controller type: geo, geo-a, l1geo, l1mpc, indi-a, xadap')
-    parser.add_argument('--experiment', type=str, default='wind', help='experiment type: wind, uncertainty')
+    parser.add_argument('--controller', type=str, default='geo', 
+                       help='controller type: geo, geo-a, l1geo, l1mpc, indi-a, xadap')
+    parser.add_argument('--experiment', type=str, default='wind', 
+                       choices=[e.value for e in ExperimentType],
+                       help='experiment type: wind, uncertainty, force, torque, all')
     parser.add_argument('--num_trials', type=int, default=100)
-    parser.add_argument('--parallel', type=bool, default=True, help='if run in parallel')
-    parser.add_argument('--seed', type=int, default=42, help='seed for random number generator')
-    parser.add_argument('--save_trials', type=bool, default=False, help='save individual trials to csv')
+    parser.add_argument('--seed', type=int, default=42, 
+                       help='seed for random number generator')
+    parser.add_argument('--save_trials', type=bool, default=False, 
+                       help='save individual trials to csv')
     return parser.parse_args()
 
 def switch_controller(controller_type,quad_params):
@@ -56,73 +61,7 @@ def switch_controller(controller_type,quad_params):
         print(f"Controller type {controller_type} not supported yet. We use default SE3Control")
         return SE3Control(quad_params)
 
-def create_randomized_trajectories(num_trials, seed=None):
-    """Pre-generate multiple trajectories"""
-    if seed is not None:
-        np.random.seed(seed)
-    
-    # init pos, vel, acc
-    pos0 = np.array([0, 0, 0])
-    vel0 = np.array([0, 0, 0])
-    acc0 = np.array([0, 0, 0])
-    gravity = np.array([0, 0, -9.81])
-    Tf = 5
-
-    trajectories = []
-    for i in range(num_trials): # TODO random according to a config yaml file
-        trajectory = RapidTrajectory(pos0, vel0, acc0, gravity)
-        posf = np.random.uniform(-10, 10, size=3)
-        velf = np.random.uniform(-5, 5, size=3)
-        accf = np.random.uniform(-2, 2, size=3)
-        trajectory.set_goal_position(posf)
-        trajectory.set_goal_velocity(velf)
-        trajectory.set_goal_acceleration(accf)
-        # Run the algorithm, and generate the trajectory.
-        trajectory.generate(Tf) 
-        trajectories.append(trajectory)
-    return trajectories
-
-def create_wind_profiles(num_profiles, seed=None):
-    """Pre-generate multiple wind profiles"""
-    if seed is not None:
-        np.random.seed(seed)
-    
-    wind_profiles = []
-    for i in range(num_profiles):
-        wind_mean = np.random.uniform(-2, 2, size=3)
-        wind_var = np.random.uniform(0.1, 1.0, size=3)
-        # Randomize the wind input for this trial
-        wx = np.random.uniform(low=-3, high=3)
-        wy = np.random.uniform(low=-3, high=3)
-        wz = np.random.uniform(low=-3, high=3)
-        sx = np.random.uniform(low=30, high=60)
-        sy = np.random.uniform(low=30, high=60)
-        sz = np.random.uniform(low=30, high=60)
-        wind_profile = DrydenGust(dt=1/100, avg_wind=np.array([wx,wy,wz]), sig_wind=np.array([sx,sy,sz]))
-        wind_profiles.append(wind_profile)
-    
-    return wind_profiles
-
-def create_randomized_controllers(controller_type, base_params, num_controllers, seed=None):
-    """Pre-generate multiple controller instances with randomized parameter assumptions"""
-    if seed is not None:
-        np.random.seed(seed)
-    
-    controllers = []
-    for i in range(num_controllers):
-        params = base_params.copy()
-        # TODO
-        # Add random perturbations to controller's parameter assumptions
-        # params['mass'] *= (1 + np.random.normal(0, 0.1))  # 10% variation
-        params['Ixx'] *= (1 + np.random.normal(0, 0.1))
-        params['Iyy'] *= (1 + np.random.normal(0, 0.1))
-        params['Izz'] *= (1 + np.random.normal(0, 0.1))
-        
-        controllers.append(switch_controller(controller_type, params))
-    
-    return controllers
-
-def generate_summary(controller_type, controllers, vehicle, wind_profiles, trajectories,
+def generate_summary(controller_type, controllers, vehicle, wind_profiles, trajectories, ext_force, ext_torque,
                       num_simulations=100, parallel_bool=True, save_trials=False):
     """
     Main function for generating data.
@@ -131,6 +70,8 @@ def generate_summary(controller_type, controllers, vehicle, wind_profiles, traje
         vehicle: The vehicle to use.
         wind_profile: The wind profile to use.
         trajectories: The trajectories to use.
+        ext_force: The external force to use.
+        ext_torque: The external torque to use.
         num_simulations: The number of simulations to run.
         parallel_bool: If True, runs the simulations in parallel. If False, runs the simulations sequentially.
         save_trials: If True, saves each trial data to a separate .csv file. Uses more memory, but allows you to see the results of each trial at a later date.
@@ -147,16 +88,7 @@ def generate_summary(controller_type, controllers, vehicle, wind_profiles, traje
     output_csv_file = os.path.dirname(__file__) + f'/data/summary_{controller_name}.csv'
 
     if os.path.exists(output_csv_file):
-        # Ask the user if they want to remove the existing file.
-        user_input = input("The file {} already exists. Do you want to remove the existing file? (y/n)".format(output_csv_file))
-        if user_input == 'y':
-            # Remove the existing file
-            os.remove(output_csv_file)
-        elif user_input == 'n':
-            raise Exception("Please delete or rename the file {} before running this script.".format(output_csv_file))
-        else:
-            raise Exception("Invalid input. Please enter 'y' or 'n'.")
-    
+        os.remove(output_csv_file)
     savepath = None
     if save_trials:
         savepath = os.path.dirname(__file__)+ f'/data/trial_data_{controller_name}'
@@ -180,21 +112,17 @@ def generate_summary(controller_type, controllers, vehicle, wind_profiles, traje
         writer = csv.writer(file)
         # This depends on the number of waypoints and the order of the polynomial. Currently pos is 7th order and yaw is 7th order.
         writer.writerow(['traj_number'] + ['pos_tracking_error'] + ['heading_error'] )
-                # + ['x_poly_seg_{}_coeff_{}'.format(i,j) for i in range(num_waypoints-1) for j in range(8)]
-                # + ['y_poly_seg_{}_coeff_{}'.format(i,j) for i in range(num_waypoints-1) for j in range(8)]
-                # + ['z_poly_seg_{}_coeff_{}'.format(i,j) for i in range(num_waypoints-1) for j in range(8)]
-                # + ['yaw_poly_seg_{}_coeff_{}'.format(i,j) for i in range(num_waypoints-1) for j in range(8)])  
 
     # Create world
     world = World.empty([-world_size/2, world_size/2, -world_size/2, world_size/2, -world_size/2, world_size/2])
 
     # Generate the data
     start_time = time.time()
-    generate_data(output_csv_file, world, vehicle, controllers, wind_profiles, trajectories,
-                  num_simulations,
-                  parallel=parallel_bool,
-                  save_individual_trials=save_trials,
-                  save_trial_path=savepath)
+    generate_data(output_csv_file, world, vehicle, controllers, wind_profiles,
+                   trajectories,num_simulations, ext_force, ext_torque,
+                   parallel=parallel_bool,
+                   save_individual_trials=save_trials,
+                   save_trial_path=savepath)
     end_time = time.time()
     print("Time elapsed: %3.2f seconds, parallel: %s" % (end_time-start_time, parallel_bool))
 
@@ -222,7 +150,8 @@ def generate_summary(controller_type, controllers, vehicle, wind_profiles, traje
         controller_name,
         success_rate,
         avg_pos_error,
-        avg_heading_error
+        avg_heading_error,
+        stats_file=os.path.dirname(__file__)+ f'/data/controller_stats.csv'
     )
 
     return None
@@ -269,29 +198,35 @@ def update_stats_csv(controller_name, success_rate, avg_pos_error, avg_heading_e
 def main():
     args = parse_args()
     vehicle = Multirotor(quad_params)
-    trajectories = create_randomized_trajectories(args.num_trials, seed=args.seed)
     
-    # Create controllers and wind profiles based on experiment type
-    if args.experiment == 'wind':
-        # Create standard controllers with no parameter variation
-        controllers = [switch_controller(args.controller, quad_params) for _ in range(args.num_trials)]
-        # Create varied wind profiles
-        wind_profiles = create_wind_profiles(args.num_trials, seed=args.seed)
+    # Create randomization config based on experiment type
+    config = RandomizationConfig.from_experiment_type(
+        args.experiment,
+        args.num_trials,
+        args.seed
+    )
     
-    elif args.experiment == 'uncertainty':
-        # Create controllers with parameter variations
-        controllers = create_randomized_controllers(args.controller, quad_params, args.num_trials, seed=args.seed)
-        # Create standard (or no) wind profiles
-        wind_profiles = [None] * args.num_trials
+    # Generate all randomized components
+    trajectories = config.create_trajectories()
+    controllers = config.create_controllers(args.controller, quad_params, switch_controller)
+    wind_profiles = config.create_wind_profiles()
+    ext_force = config.create_ext_force()
+    ext_torque = config.create_ext_torque()
     
-    else:
-        raise ValueError(f"Experiment type {args.experiment} not supported")
+    parallel = args.controller != 'xadap' and 'mpc' not in args.controller
     
-    Parallel = args.controller != 'xadap'
-    # Parallel = False
-    generate_summary(args.controller, controllers, vehicle, wind_profiles, trajectories,
-                    args.num_trials, Parallel, args.save_trials)
- 
+    generate_summary(
+        args.controller,
+        controllers,
+        vehicle,
+        wind_profiles,
+        trajectories,
+        ext_force,
+        ext_torque,
+        args.num_trials,
+        parallel,
+        args.save_trials
+    )
 
 if __name__ == '__main__':
     main()
