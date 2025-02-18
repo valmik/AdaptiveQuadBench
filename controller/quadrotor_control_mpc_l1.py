@@ -20,7 +20,7 @@ class L1_ModelPredictiveControl(ModelPredictiveControl):
             quad_params, dict with keys specified in rotorpy/vehicles
         """
         super().__init__(quad_params, trajectory, sim_rate, t_final, t_horizon, n_nodes)
-        
+        self.quad_mpc = None
         """ L1-related parameters """
         self.As_v = -1 # parameter for L1
         self.As_omega = -1 # parameter for L1
@@ -54,7 +54,9 @@ class L1_ModelPredictiveControl(ModelPredictiveControl):
         self.din_L1 = (self.v_hat_prev, self.omega_hat_prev, self.R_prev, self.v_prev, self.omega_prev,
                        self.u_b_prev, self.u_ad_prev, self.sigma_m_hat_prev, self.sigma_um_hat_prev, 
                        self.lpf1_prev, self.lpf2_prev)
-
+    def update_trajectory(self, trajectory):
+        self.quad_mpc = QuadMPC(quad_params=self.quad_params, trajectory=trajectory, t_final=self.t_final,
+                                t_horizon=self.t_horizon, n_nodes=self.n_nodes)
     def L1AC(self, R, W, x, v, f, M):
             (As_v, As_omega, dt, ctoffq1Thrust, ctoffq1Moment, ctoffq2Moment, kg_vehicleMass, GRAVITY_MAGNITUDE, J ) = self.L1_params
             (v_hat_prev, omega_hat_prev, R_prev, v_prev, omega_prev,
@@ -186,6 +188,9 @@ class L1_ModelPredictiveControl(ModelPredictiveControl):
                 cmd_moment, N*m
                 cmd_q, quaternion [i,j,k,w]
         """
+
+        if self.quad_mpc is None:
+             raise ValueError("QuadMPC is not initialized. Call update_trajectory() first.")
         
         x = state['x'].reshape(3)
         v = state['v'].reshape(3)

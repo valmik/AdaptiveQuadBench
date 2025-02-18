@@ -20,7 +20,7 @@ class ModelPredictiveControl(MultirotorControlTemplate):
         """
         super().__init__(quad_params)
         self.quad_params = quad_params
-        self.quad_mpc = QuadMPC(quad_params=quad_params, trajectory=trajectory, t_final=t_final, t_horizon=t_horizon, n_nodes=n_nodes)
+        self.quad_mpc = None
         
         self.t_final = t_final
         self.t_horizon = t_horizon
@@ -58,6 +58,8 @@ class ModelPredictiveControl(MultirotorControlTemplate):
                 cmd_moment, N*m
                 cmd_q, quaternion [i,j,k,w]
         """
+        if self.quad_mpc is None:
+            raise ValueError("QuadMPC is not initialized. Call update_trajectory() first.")
         # unpack state used for MPC
         state = self.unpack_state(state)
 
