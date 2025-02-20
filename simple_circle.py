@@ -64,14 +64,14 @@ mpc_controller = ModelPredictiveControl(quad_params=quad_params)
 l1_mpc_controller = L1_ModelPredictiveControl(quad_params=quad_params)
 mpc_controller.update_trajectory(CircularTraj(radius=2))
 # l1_mpc_controller.update_trajectory(CircularTraj(radius=2))
-# An instance of the simulator can be generated as follows: 
+# # An instance of the simulator can be generated as follows: 
 sim_instance = Environment(vehicle=Multirotor(quad_params,control_abstraction='cmd_motor_speeds'),           # vehicle object, must be specified.  # ! choose the appropriate control abstraction
                            # please refer to multirotor.py file to check your control_abstraction.
-                           controller=GeometricAdaptiveController(quad_params),        # ! Replace your Controller here 
+                        #    controller=GeometricAdaptiveController(quad_params),        # ! Replace your Controller here 
                         #    controller=SE3Control(quad_params),
                         #     controller=GeoControl(quad_params),
                               # controller=L1_GeoControl(quad_params),
-                        #    controller = mpc_controller,
+                           controller = mpc_controller,
                         # controller = l1_mpc_controller,
                         #    controller=INDIAdaptiveController(quad_params),
                         #    controller = Xadap_NN_control(quad_params),

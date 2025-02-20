@@ -32,9 +32,9 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--controller', type=str, default='geo', 
                        help='controller type: geo, geo-a, l1geo, l1mpc, indi-a, xadap')
-    parser.add_argument('--experiment', type=str, default='wind', 
+    parser.add_argument('--experiment', type=str, default='no', 
                        choices=[e.value for e in ExperimentType],
-                       help='experiment type: wind, uncertainty, force, torque, all')
+                       help='experiment type: no, wind, uncertainty, force, torque, all')
     parser.add_argument('--num_trials', type=int, default=100)
     parser.add_argument('--seed', type=int, default=42, 
                        help='seed for random number generator')
@@ -62,36 +62,24 @@ def switch_controller(controller_type,quad_params):
         return SE3Control(quad_params)
 
 def generate_summary(controller_type, controllers, vehicle, wind_profiles, trajectories, ext_force, ext_torque,
-                      num_simulations=100, parallel_bool=True, save_trials=False):
+                      num_simulations=100, parallel_bool=True, save_trials=False, experiment_type='no'):
     """
     Main function for generating data.
-    Inputs:
-        controller: The controller to use.
-        vehicle: The vehicle to use.
-        wind_profile: The wind profile to use.
-        trajectories: The trajectories to use.
-        ext_force: The external force to use.
-        ext_torque: The external torque to use.
-        num_simulations: The number of simulations to run.
-        parallel_bool: If True, runs the simulations in parallel. If False, runs the simulations sequentially.
-        save_trials: If True, saves each trial data to a separate .csv file. Uses more memory, but allows you to see the results of each trial at a later date.
-    Outputs:
-        None. It writes to the output file.
+    Added experiment_type parameter to track experiment conditions
     """
-
     world_size = 10
 
     # convert controller to string
     controller_name = str(controller_type)
 
     # Create the output file and handle existing files
-    output_csv_file = os.path.dirname(__file__) + f'/data/summary_{controller_name}.csv'
+    output_csv_file = os.path.dirname(__file__) + f'/data/summary_{controller_name}_{experiment_type}.csv'
 
     if os.path.exists(output_csv_file):
         os.remove(output_csv_file)
     savepath = None
     if save_trials:
-        savepath = os.path.dirname(__file__)+ f'/data/trial_data_{controller_name}'
+        savepath = os.path.dirname(__file__)+ f'/data/trial_data_{controller_name}_{experiment_type}'
         print(f"savepath: {savepath}")
         if not os.path.exists(savepath):
             os.makedirs(savepath)
@@ -145,9 +133,10 @@ def generate_summary(controller_type, controllers, vehicle, wind_profiles, traje
     print(f"Average heading_error: {avg_heading_error:.2f} deg")
     print("--------------------------------")
 
-    # Update stats CSV
+    # Update stats CSV with experiment type
     update_stats_csv(
         controller_name,
+        experiment_type,
         success_rate,
         avg_pos_error,
         avg_heading_error,
@@ -156,10 +145,10 @@ def generate_summary(controller_type, controllers, vehicle, wind_profiles, traje
 
     return None
 
-def update_stats_csv(controller_name, success_rate, avg_pos_error, avg_heading_error, stats_file='data/controller_stats.csv'):
+def update_stats_csv(controller_name, experiment_type, success_rate, avg_pos_error, avg_heading_error, stats_file='data/controller_stats.csv'):
     """
     Updates or adds controller statistics to the CSV file.
-    If controller exists, overwrites its stats. If not, adds a new row.
+    Now includes experiment type in the tracking.
     """
     import pandas as pd
     from pathlib import Path
@@ -170,6 +159,7 @@ def update_stats_csv(controller_name, success_rate, avg_pos_error, avg_heading_e
     # Create DataFrame with new stats
     new_stats = pd.DataFrame({
         'controller': [controller_name],
+        'experiment': [experiment_type],
         'success_rate': [success_rate],
         'avg_position_error': [avg_pos_error],
         'avg_heading_error': [avg_heading_error],
@@ -180,8 +170,9 @@ def update_stats_csv(controller_name, success_rate, avg_pos_error, avg_heading_e
         # Try to read existing stats
         if Path(stats_file).exists():
             stats_df = pd.read_csv(stats_file)
-            # Remove old entry for this controller if it exists
-            stats_df = stats_df[stats_df['controller'] != controller_name]
+            # Remove old entry for this controller+experiment combination if it exists
+            stats_df = stats_df[~((stats_df['controller'] == controller_name) & 
+                                (stats_df['experiment'] == experiment_type))]
             # Append new stats
             stats_df = pd.concat([stats_df, new_stats], ignore_index=True)
         else:
@@ -192,8 +183,8 @@ def update_stats_csv(controller_name, success_rate, avg_pos_error, avg_heading_e
         print(f"\nUpdated statistics in {stats_file}")
         print(stats_df.to_string(index=False))
 
-    except Exception as e:
-        print(f"Error updating stats file: {e}")
+    except Exception as exp:
+        print(f"Error updating stats file: {exp}")
 
 def main():
     args = parse_args()
@@ -225,7 +216,8 @@ def main():
         ext_torque,
         args.num_trials,
         parallel,
-        args.save_trials
+        args.save_trials,
+        args.experiment
     )
 
 if __name__ == '__main__':

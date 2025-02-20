@@ -7,6 +7,7 @@ from rotorpy.wind.dryden_winds import DrydenGust
 
 class ExperimentType(Enum):
     """Enum for different experiment types"""
+    NO = 'no'  # No randomization or disturbances
     WIND = 'wind'
     UNCERTAINTY = 'uncertainty'
     FORCE = 'force'
@@ -143,6 +144,7 @@ class RandomizationConfig:
         }
         
         configs = {
+            ExperimentType.NO: {},  # No additional randomization
             ExperimentType.WIND: {'wind_enabled': True},
             ExperimentType.UNCERTAINTY: {'controller_uncertainty_enabled': True},
             ExperimentType.FORCE: {'ext_force_enabled': True},
