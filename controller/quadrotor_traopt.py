@@ -110,10 +110,9 @@ class QuadOptimizer:
 
         # Ensure current working directory is current folder
         os.chdir(os.path.dirname(os.path.realpath(__file__)))
-        self.acados_models_dir = '../../acados_models'
+        # self.acados_models_dir = '../../acados_models'
+        self.acados_models_dir = './acados_models'
         safe_mkdir_recursive(os.path.join(os.getcwd(), self.acados_models_dir))
-
-        print(self.acados_models_dir)
 
         for key, key_model in zip(acados_models.keys(), acados_models.values()):
 
@@ -178,7 +177,11 @@ class QuadOptimizer:
 
             # Compile acados OCP solver if necessary
             json_file = os.path.join(self.acados_models_dir, key_model.name + '_acados_ocp.json')
-            self.acados_ocp_solver[key] = AcadosOcpSolver(ocp, json_file=json_file,verbose=False)
+            # Check if c_generated_code exists
+            if os.path.exists(os.path.join(os.getcwd(), 'c_generated_code')):
+                self.acados_ocp_solver[key] = AcadosOcpSolver(ocp, json_file=json_file,verbose=False,generate=False,build=False)
+            else:
+                self.acados_ocp_solver[key] = AcadosOcpSolver(ocp, json_file=json_file,verbose=False,)
 
     def clear_acados_model(self):
         """
