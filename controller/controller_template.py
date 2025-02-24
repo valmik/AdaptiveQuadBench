@@ -45,7 +45,7 @@ class MultirotorControlTemplate(ABC):
         self.num_rotors = vehicle_params['num_rotors']
         self.rotor_pos = vehicle_params['rotor_pos']
         self.rotor_dir = vehicle_params['rotor_directions']
-
+        self.rotor_efficiency = vehicle_params['rotor_efficiency']
         # Rotor parameters    
         self.rotor_speed_min = vehicle_params['rotor_speed_min']  # rad/s
         self.rotor_speed_max = vehicle_params['rotor_speed_max']  # rad/s

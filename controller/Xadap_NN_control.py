@@ -22,21 +22,45 @@ import pandas as pd
 class ModelType(Enum):
     BASE_MODEL = 1
     ADAP_MODULE = 2
+
+def init_session(model_path):
+    return onnxruntime.InferenceSession(model_path, None)
+
+'''
+ PickableInferenceSession is a wrapper around onnxruntime.InferenceSession 
+ that allows for pickling for multiprocessing
+'''
+class PickableInferenceSession:
+    def __init__(self, model_path):
+        self.model_path = model_path
+        self.sess = init_session(self.model_path)
+
+    def run(self, *args):
+        return self.sess.run(*args)
+
+    def get_inputs(self):
+        return self.sess.get_inputs()
+
+    def __getstate__(self):
+        return {'model_path': self.model_path}
+
+    def __setstate__(self, values):
+        self.model_path = values['model_path']
+        self.sess = init_session(self.model_path)
+
 class Model:
     def __init__(self, base_model_path='mlp_1011.onnx', adap_module_path='encoder_1011.onnx', model_rms_path=None):
         current_path = os.path.dirname(os.path.abspath(__file__)) + '/models/Xadap/'
         self.base_model_path = current_path+base_model_path
         self.adap_module_path = current_path+adap_module_path
-        # self.model_rms_path = current_path+model_rms_path
-
+        
         self.obs_mean = np.loadtxt(current_path+'mean_1011.csv', delimiter=" ")
         self.obs_var = np.loadtxt(current_path+'var_1011.csv', delimiter=" ")
 
-
         self.act_mean = np.array([1.0 / 2, 1.0 / 2,
-                                  1.0 / 2, 1.0 / 2])[np.newaxis, :]
+                                1.0 / 2, 1.0 / 2])[np.newaxis, :]
         self.act_std = np.array([1.0 / 2, 1.0 / 2,
-                                 1.0 / 2, 1.0 / 2])[np.newaxis, :]
+                               1.0 / 2, 1.0 / 2])[np.newaxis, :]
         self.act_size = 4
         self.state_obs_size = 8
         self.history_len = 100
@@ -61,11 +85,9 @@ class Model:
         self.set_history_len(history_len)
 
     def activate(self):
-        self.base_session = onnxruntime.InferenceSession(
-            self.base_model_path, None)
+        self.base_session = PickableInferenceSession(self.base_model_path)
         self.base_obs_name = self.base_session.get_inputs()[0].name
-        self.adap_session = onnxruntime.InferenceSession(
-            self.adap_module_path, None)
+        self.adap_session = PickableInferenceSession(self.adap_module_path)
         self.adap_obs_name = self.adap_session.get_inputs()[0].name
 
     def normalize_obs(self, obs, model_type):

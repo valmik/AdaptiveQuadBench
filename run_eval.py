@@ -8,7 +8,7 @@ from controller.quadrotor_control_mpc_l1 import L1_ModelPredictiveControl
 from controller.Xadap_NN_control import Xadap_NN_control
 from rotorpy.controllers.quadrotor_control import SE3Control
 # Import your vehicle here
-from quad_param.Agilicious import quad_params
+from quad_param.quadrotor import quad_params
 from rotorpy.trajectories.random_motion_prim_traj import RapidTrajectory
 
 from rotorpy.vehicles.multirotor import Multirotor
@@ -34,12 +34,14 @@ def parse_args():
                        help='controller type: geo, geo-a, l1geo, l1mpc, indi-a, xadap')
     parser.add_argument('--experiment', type=str, default='no', 
                        choices=[e.value for e in ExperimentType],
-                       help='experiment type: no, wind, uncertainty, force, torque, all')
+                       help='experiment type: no, wind, uncertainty, force, torque, rotoreff, all')
     parser.add_argument('--num_trials', type=int, default=100)
     parser.add_argument('--seed', type=int, default=42, 
                        help='seed for random number generator')
-    parser.add_argument('--save_trials', type=bool, default=False, 
+    parser.add_argument('--save_trials', action='store_true',
                        help='save individual trials to csv')
+    parser.add_argument('--serial', action='store_true',
+                       help='run in serial')
     return parser.parse_args()
 
 def switch_controller(controller_type,quad_params):
@@ -61,11 +63,11 @@ def switch_controller(controller_type,quad_params):
         print(f"Controller type {controller_type} not supported yet. We use default SE3Control")
         return SE3Control(quad_params)
 
-def generate_summary(controller_type, controllers, vehicle, wind_profiles, trajectories, ext_force, ext_torque,
+def generate_summary(controller_type, controllers, vehicles, wind_profiles, trajectories, ext_force, ext_torque,
                       num_simulations=100, parallel_bool=True, save_trials=False, experiment_type='no'):
     """
     Main function for generating data.
-    Added experiment_type parameter to track experiment conditions
+    Now accepts a list of vehicles with randomized parameters.
     """
     world_size = 10
 
@@ -87,7 +89,6 @@ def generate_summary(controller_type, controllers, vehicle, wind_profiles, traje
             # Ask the user if they want to remove the existing files in the directory.
             user_input = input(f"The directory {savepath} already exists. Do you want to remove the existing files? (y/n)")
             if user_input == 'y':
-                # Remove existing files in the directory
                 for file in os.listdir(savepath):
                     os.remove(os.path.join(savepath, file))
             elif user_input == 'n':
@@ -98,16 +99,15 @@ def generate_summary(controller_type, controllers, vehicle, wind_profiles, traje
     # Append headers to the output file
     with open(output_csv_file, 'w', newline='') as file:
         writer = csv.writer(file)
-        # This depends on the number of waypoints and the order of the polynomial. Currently pos is 7th order and yaw is 7th order.
-        writer.writerow(['traj_number'] + ['pos_tracking_error'] + ['heading_error'] )
+        writer.writerow(['traj_number'] + ['pos_tracking_error'] + ['heading_error'])
 
     # Create world
     world = World.empty([-world_size/2, world_size/2, -world_size/2, world_size/2, -world_size/2, world_size/2])
 
     # Generate the data
     start_time = time.time()
-    generate_data(output_csv_file, world, vehicle, controllers, wind_profiles,
-                   trajectories,num_simulations, ext_force, ext_torque,
+    generate_data(output_csv_file, world, vehicles, controllers, wind_profiles,
+                   trajectories, num_simulations, ext_force, ext_torque,
                    parallel=parallel_bool,
                    save_individual_trials=save_trials,
                    save_trial_path=savepath)
@@ -188,34 +188,38 @@ def update_stats_csv(controller_name, experiment_type, success_rate, avg_pos_err
 
 def main():
     args = parse_args()
-    vehicle = Multirotor(quad_params)
     
     # Create randomization config based on experiment type
     config = RandomizationConfig.from_experiment_type(
         args.experiment,
         args.num_trials,
+        quad_params,  # Pass quad_params during initialization
         args.seed
     )
-    
+
     # Generate all randomized components
     trajectories = config.create_trajectories()
     controllers = config.create_controllers(args.controller, quad_params, switch_controller)
     wind_profiles = config.create_wind_profiles()
-    ext_force = config.create_ext_force()
-    ext_torque = config.create_ext_torque()
+    ext_force = config.create_ext_force()  # No need to pass quad_params
+    ext_torque = config.create_ext_torque()  # No need to pass quad_params
     
-    parallel = args.controller != 'xadap' and 'mpc' not in args.controller
+    # Generate randomized vehicle parameters
+    vehicle_params_list = config.create_vehicle_params(quad_params)
+    
+    # Create vehicles with randomized parameters
+    vehicles = [Multirotor(params) for params in vehicle_params_list]
     
     generate_summary(
         args.controller,
         controllers,
-        vehicle,
+        vehicles,
         wind_profiles,
         trajectories,
         ext_force,
         ext_torque,
         args.num_trials,
-        parallel,
+        (not args.serial) and args.controller != 'xadap',
         args.save_trials,
         args.experiment
     )
