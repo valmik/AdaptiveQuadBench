@@ -14,16 +14,14 @@ class ExperimentType(Enum):
     FORCE = 'force'
     TORQUE = 'torque'
     ROTOR_EFFICIENCY = 'rotoreff'
-    LATENCY = 'latency'
     PAYLOAD = 'payload'
-    ALL = 'all'  # Combines all disturbances
     
     # TODO latency
     # TODO easy swap trajectory type 
-    # TODO when to fail feature
-    # TODO single visualizer for single trial
-    # TODO debug indi-a
-    
+    # TODO model uncertainty type (Uniform and Scale)
+    # TODO tune base controller
+    # TODO more elegant on rotor efficiency rather than just hard scale cmd_spd
+    # TODO parallel of NN controller (to pytorch)
     @classmethod
     def from_string(cls, value: str) -> 'ExperimentType':
         """Convert string to ExperimentType, case-insensitive"""
@@ -40,45 +38,152 @@ class ExperimentType(Enum):
 class RandomizationConfig:
     """Configuration class for all randomization parameters"""
     num_trials: int
-    quad_params: Dict[str, Any]  # Add quad_params as a field
+    quad_params: Dict[str, Any]
     seed: Optional[int] = None
+    experiment_type: ExperimentType = ExperimentType.NO
+    # Base ranges (without intensity scaling)
+    base_wind_speed_range: tuple = (-3, 3)
+    base_force_range: tuple = (-1, 1)
+    base_torque_range: tuple = (-1, 1)
+    base_mass_uncertainty: float = 0.1  # 10% variation
+    base_inertia_uncertainty: float = 0.1
+    base_rotor_efficiency_range: tuple = (0.7, 1.0)
+    base_payload_mass_ratio_range: tuple = (0.1, 0.5)
     
-    # Trajectory parameters
+    # Current ranges (with intensity scaling)
+    wind_speed_range: tuple = (-3, 3)
+    force_range: tuple = (-1, 1)
+    torque_range: tuple = (-1, 1)
+    mass_uncertainty: float = 0.1
+    inertia_uncertainty: float = 0.1
+    rotor_efficiency_range: tuple = (0.7, 1.0)
+    payload_mass_ratio_range: tuple = (0.1, 0.5)
+    
+    # Fixed ranges (not affected by intensity)
+    wind_sigma_range: tuple = (30, 60)
+    payload_offset_ratio_range: tuple = (-0.2, 0.2)
     traj_pos_range: tuple = (-2, 2)
     traj_vel_range: tuple = (-2, 2)
     traj_acc_range: tuple = (-2, 2)
     traj_time: float = 5.0
-    
-    # Wind parameters
-    wind_enabled: bool = True
-    wind_speed_range: tuple = (-3, 3)
-    wind_sigma_range: tuple = (30, 60)
-    
-    # External force/torque parameters
-    ext_force_enabled: bool = True
-    ext_torque_enabled: bool = True
-    force_range: tuple = (-1, 1)
-    torque_range: tuple = (-1, 1)
-    
-    # Controller uncertainty parameters
+
+    # Enable flags
+    wind_enabled: bool = False
+    ext_force_enabled: bool = False
+    ext_torque_enabled: bool = False
     controller_uncertainty_enabled: bool = False
-    mass_uncertainty: float = 0.1  # 10% variation
-    inertia_uncertainty: float = 0.1
-    
-    # Add rotor efficiency parameters
     rotor_efficiency_enabled: bool = False
-    rotor_efficiency_range: tuple = (0.7, 1.0)  # 70% to 100% efficiency
-    
-    # Payload parameters (now relative to vehicle parameters)
     payload_enabled: bool = False
-    payload_mass_ratio_range: tuple = (0.1, 0.5)  # 10% to 50% of quad mass
-    payload_offset_ratio_range: tuple = (-0.2, 0.2)  # -20% to 20% of arm length
+
+    @classmethod
+    def from_experiment_type(cls, experiment_type: Union[str, ExperimentType], 
+                           num_trials: int, 
+                           quad_params: Dict[str, Any], 
+                           seed: Optional[int] = None) -> 'RandomizationConfig':
+        """Factory method to create config based on experiment type"""
+        if isinstance(experiment_type, str):
+            experiment_type = ExperimentType.from_string(experiment_type)
+            
+        # Create base configuration
+        base_config = {
+            'num_trials': num_trials,
+            'quad_params': quad_params,
+            'seed': seed,
+            'wind_enabled': False,
+            'controller_uncertainty_enabled': False,
+            'ext_force_enabled': False,
+            'ext_torque_enabled': False,
+            'rotor_efficiency_enabled': False,
+            'payload_enabled': False,
+            'experiment_type': experiment_type
+        }
+        
+        # Update enabled flags based on experiment type
+        configs = {
+            ExperimentType.NO: {},
+            ExperimentType.WIND: {'wind_enabled': True},
+            ExperimentType.UNCERTAINTY: {'controller_uncertainty_enabled': True},
+            ExperimentType.FORCE: {'ext_force_enabled': True},
+            ExperimentType.TORQUE: {'ext_torque_enabled': True},
+            ExperimentType.ROTOR_EFFICIENCY: {'rotor_efficiency_enabled': True},
+            ExperimentType.PAYLOAD: {'payload_enabled': True},
+         
+        }
+        
+        base_config.update(configs[experiment_type])
+        
+        # Create config instance
+        config = cls(**base_config)
+        
+        return config
     
-    def __post_init__(self):
-        """Initialize random seed if provided"""
-        if self.seed is not None:
-            np.random.seed(self.seed)
-    
+
+    def scale_ranges_with_intensity(self, intensity: float):
+        """Scale the ranges based on intensity and experiment type"""
+        if intensity <= 0:
+            raise ValueError("Intensity must be positive")
+        
+        if intensity == 1.0:
+            return
+            
+        if self.experiment_type == ExperimentType.WIND:
+            # Only scale wind speed
+            max_wind = self.base_wind_speed_range[1] * intensity
+            self.wind_speed_range = (-max_wind, max_wind)
+            
+        elif self.experiment_type == ExperimentType.FORCE:
+            # Only scale force
+            max_force = self.base_force_range[1] * intensity
+            self.force_range = (-max_force, max_force)
+            
+        elif self.experiment_type == ExperimentType.TORQUE:
+            # Only scale torque
+            max_torque = self.base_torque_range[1] * intensity
+            self.torque_range = (-max_torque, max_torque)
+            
+        elif self.experiment_type == ExperimentType.UNCERTAINTY:
+            # Only scale uncertainties
+            self.mass_uncertainty = self.base_mass_uncertainty * intensity
+            self.inertia_uncertainty = self.base_inertia_uncertainty * intensity
+            
+        elif self.experiment_type == ExperimentType.ROTOR_EFFICIENCY:
+            # Only scale rotor efficiency
+            min_efficiency = max(0.1, self.base_rotor_efficiency_range[0] / intensity)
+            self.rotor_efficiency_range = (min_efficiency, 1.0)
+            
+        elif self.experiment_type == ExperimentType.PAYLOAD:
+            # Only scale payload mass
+            max_payload = min(2.0, self.base_payload_mass_ratio_range[1] * intensity)
+            self.payload_mass_ratio_range = (self.base_payload_mass_ratio_range[0], max_payload)
+            
+    def create_base_components(self) -> Dict[str, Any]:
+        """Generate components that should stay constant across intensity variations"""
+        base_components = {
+            'trajectories': self.create_trajectories(),
+        }
+
+        # Add components based on experiment type
+        if self.experiment_type in [ExperimentType.NO, ExperimentType.WIND, ExperimentType.FORCE, ExperimentType.TORQUE, ExperimentType.PAYLOAD]:
+            # For these types, vehicle and controller params stay constant
+            base_components['vehicle_params'] = self.create_vehicle_params(self.quad_params)
+            base_components['controller_params'] = self.create_controller_params(self.quad_params)
+        
+        return base_components
+
+    def create_varied_components(self) -> Dict[str, Any]:
+        """Generate components that vary with intensity based on experiment type"""
+        varied_components = {}
+
+        varied_components['wind_profiles'] = self.create_wind_profiles()
+        varied_components['ext_force'] = self.create_ext_force()
+        varied_components['ext_torque'] = self.create_ext_torque()
+        if self.experiment_type == ExperimentType.ROTOR_EFFICIENCY or self.experiment_type == ExperimentType.UNCERTAINTY:
+            varied_components['vehicle_params'] = self.create_vehicle_params(self.quad_params)
+            varied_components['controller_params'] = self.create_controller_params(self.quad_params)
+            
+        return varied_components
+
+
     def create_trajectories(self) -> List[RapidTrajectory]:
         """Generate randomized trajectories"""
         trajectories = []
@@ -135,20 +240,6 @@ class RandomizationConfig:
             vehicle_params_list.append(params)
         return vehicle_params_list
 
-    def create_controllers(self, controller_type: str, base_params: Dict[str, Any], controller_factory) -> List[Any]:
-        """Generate controllers with optional parameter uncertainty"""
-        controllers = []
-        for _ in range(self.num_trials):
-            params = base_params.copy()
-            if self.controller_uncertainty_enabled:
-                params['Ixx'] *= (1 + np.random.normal(0, self.inertia_uncertainty))
-                params['Iyy'] *= (1 + np.random.normal(0, self.inertia_uncertainty))
-                params['Izz'] *= (1 + np.random.normal(0, self.inertia_uncertainty))
-                if 'mass' in params:
-                    params['mass'] *= (1 + np.random.normal(0, self.mass_uncertainty))
-            controllers.append(controller_factory(controller_type, params))
-        return controllers
-    
     def create_payload_disturbance(self) -> tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         """Generate coupled force and torque from payload using stored quad_params"""
         if not self.payload_enabled:
@@ -179,71 +270,28 @@ class RandomizationConfig:
     
     def create_ext_force(self) -> Optional[np.ndarray]:
         """Generate randomized external forces"""
-        forces = []
-        
-        if self.ext_force_enabled:
-            forces.append(np.random.uniform(*self.force_range, size=(self.num_trials, 3)))
-            
-        if self.payload_enabled:
-            payload_forces, _ = self.create_payload_disturbance()
-            forces.append(payload_forces)
-            
-        if not forces:
+        if not self.ext_force_enabled:
             return None
-            
-        return sum(forces) if len(forces) > 1 else forces[0]
+        return np.random.uniform(*self.force_range, size=(self.num_trials, 3))
     
     def create_ext_torque(self) -> Optional[np.ndarray]:
         """Generate randomized external torques"""
-        torques = []
-        
-        if self.ext_torque_enabled:
-            torques.append(np.random.uniform(*self.torque_range, size=(self.num_trials, 3)))
-            
-        if self.payload_enabled:
-            _, payload_torques = self.create_payload_disturbance()
-            torques.append(payload_torques)
-            
-        if not torques:
+        if not self.ext_torque_enabled:
             return None
-            
-        return sum(torques) if len(torques) > 1 else torques[0]
+        return np.random.uniform(*self.torque_range, size=(self.num_trials, 3))
     
-    @classmethod
-    def from_experiment_type(cls, experiment_type: Union[str, ExperimentType], num_trials: int, quad_params: Dict[str, Any], seed: Optional[int] = None) -> 'RandomizationConfig':
-        """Factory method to create config based on experiment type"""
-        if isinstance(experiment_type, str):
-            experiment_type = ExperimentType.from_string(experiment_type)
-            
-        base_config = {
-            'num_trials': num_trials,
-            'quad_params': quad_params,  # Add quad_params
-            'seed': seed,
-            'wind_enabled': False,
-            'controller_uncertainty_enabled': False,
-            'ext_force_enabled': False,
-            'ext_torque_enabled': False,
-            'rotor_efficiency_enabled': False,
-            'payload_enabled': False
-        }
-        
-        configs = {
-            ExperimentType.NO: {},  # No additional randomization
-            ExperimentType.WIND: {'wind_enabled': True},
-            ExperimentType.UNCERTAINTY: {'controller_uncertainty_enabled': True},
-            ExperimentType.FORCE: {'ext_force_enabled': True},
-            ExperimentType.TORQUE: {'ext_torque_enabled': True},
-            ExperimentType.ROTOR_EFFICIENCY: {'rotor_efficiency_enabled': True},
-            ExperimentType.PAYLOAD: {'payload_enabled': True},  # Add payload case
-            ExperimentType.ALL: {
-                'wind_enabled': True,
-                'controller_uncertainty_enabled': True,
-                'ext_force_enabled': True,
-                'ext_torque_enabled': True,
-                'rotor_efficiency_enabled': True,
-                'payload_enabled': True  # Include in ALL case
-            }
-        }
-        
-        base_config.update(configs[experiment_type])
-        return cls(**base_config) 
+    def create_controller_params(self, base_params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate controller parameters with uncertainty"""
+        controller_params_list = []
+        for _ in range(self.num_trials):
+            params = base_params.copy()
+            if self.controller_uncertainty_enabled:
+                params['Ixx'] *= (1 + np.random.normal(0, self.inertia_uncertainty))
+                params['Iyy'] *= (1 + np.random.normal(0, self.inertia_uncertainty))
+                params['Izz'] *= (1 + np.random.normal(0, self.inertia_uncertainty))
+                if 'mass' in params:
+                    params['mass'] *= (1 + np.random.normal(0, self.mass_uncertainty))
+            controller_params_list.append(params)
+        return controller_params_list
+
+    
