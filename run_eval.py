@@ -51,6 +51,9 @@ def parse_args():
                        help='maximum intensity multiplier for when2fail mode')
     parser.add_argument('--intensity_step', type=float, default=1,
                        help='intensity increment step for when2fail mode')
+    parser.add_argument('--trajectory', type=str, default='random',
+                       choices=['random', 'hover', 'circle'],
+                       help='trajectory type to use')
     return parser.parse_args()
 
 def switch_controller(controller_type,quad_params):
@@ -328,7 +331,8 @@ def run_when2fail(args, controllers_to_run):
         args.experiment,
         args.num_trials,
         quad_params,
-        args.seed
+        args.seed,
+        trajectory_type=args.trajectory
     )
     base_components = config.create_base_components()
     
@@ -486,7 +490,8 @@ def main():
             args.experiment,
             args.num_trials,
             quad_params,
-            args.seed
+            args.seed,
+            trajectory_type=args.trajectory
         )
 
         # Generate all randomized components
@@ -520,7 +525,8 @@ def main():
             args.experiment,
             args.num_trials,
             quad_params,
-            args.seed
+            args.seed,
+            trajectory_type=args.trajectory
         )
 
         # Generate all randomized components once

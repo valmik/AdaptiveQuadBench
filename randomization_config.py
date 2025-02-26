@@ -4,8 +4,15 @@ from enum import Enum, auto
 import numpy as np
 from rotorpy.trajectories.random_motion_prim_traj import RapidTrajectory
 from rotorpy.trajectories.hover_traj import HoverTraj
+from rotorpy.trajectories.circular_traj import CircularTraj
 from rotorpy.wind.dryden_winds import DrydenGust
 
+    
+# TODO latency
+# TODO model uncertainty type (Uniform and Scale)
+# TODO tune base controller
+# TODO more elegant on rotor efficiency rather than just hard scale cmd_spd
+# TODO parallel of NN controller (to pytorch)
 class ExperimentType(Enum):
     """Enum for different experiment types"""
     NO = 'no'  # No randomization or disturbances
@@ -15,13 +22,7 @@ class ExperimentType(Enum):
     TORQUE = 'torque'
     ROTOR_EFFICIENCY = 'rotoreff'
     PAYLOAD = 'payload'
-    
-    # TODO latency
-    # TODO easy swap trajectory type 
-    # TODO model uncertainty type (Uniform and Scale)
-    # TODO tune base controller
-    # TODO more elegant on rotor efficiency rather than just hard scale cmd_spd
-    # TODO parallel of NN controller (to pytorch)
+
     @classmethod
     def from_string(cls, value: str) -> 'ExperimentType':
         """Convert string to ExperimentType, case-insensitive"""
@@ -34,6 +35,24 @@ class ExperimentType(Enum):
     def __str__(self):
         return self.value
 
+class TrajectoryType(Enum):
+    """Enum for different trajectory types"""
+    RANDOM = 'random'  # Current random motion primitive
+    HOVER = 'hover'    # Hover at a point
+    CIRCLE = 'circle'  # Circular trajectory
+    
+    @classmethod
+    def from_string(cls, value: str) -> 'TrajectoryType':
+        """Convert string to TrajectoryType, case-insensitive"""
+        try:
+            return cls(value.lower())
+        except ValueError:
+            valid_types = [e.value for e in cls]
+            raise ValueError(f"Invalid trajectory type: {value}. Must be one of {valid_types}")
+    
+    def __str__(self):
+        return self.value
+
 @dataclass
 class RandomizationConfig:
     """Configuration class for all randomization parameters"""
@@ -41,6 +60,8 @@ class RandomizationConfig:
     quad_params: Dict[str, Any]
     seed: Optional[int] = None
     experiment_type: ExperimentType = ExperimentType.NO
+    trajectory_type: TrajectoryType = TrajectoryType.RANDOM
+    
     # Base ranges (without intensity scaling)
     base_wind_speed_range: tuple = (-3, 3)
     base_force_range: tuple = (-1, 1)
@@ -79,10 +100,13 @@ class RandomizationConfig:
     def from_experiment_type(cls, experiment_type: Union[str, ExperimentType], 
                            num_trials: int, 
                            quad_params: Dict[str, Any], 
-                           seed: Optional[int] = None) -> 'RandomizationConfig':
-        """Factory method to create config based on experiment type"""
+                           seed: Optional[int] = None,
+                           trajectory_type: Union[str, TrajectoryType] = TrajectoryType.RANDOM) -> 'RandomizationConfig':
+        """Factory method to create config"""
         if isinstance(experiment_type, str):
             experiment_type = ExperimentType.from_string(experiment_type)
+        if isinstance(trajectory_type, str):
+            trajectory_type = TrajectoryType.from_string(trajectory_type)
             
         # Create base configuration
         base_config = {
@@ -95,7 +119,8 @@ class RandomizationConfig:
             'ext_torque_enabled': False,
             'rotor_efficiency_enabled': False,
             'payload_enabled': False,
-            'experiment_type': experiment_type
+            'experiment_type': experiment_type,
+            'trajectory_type': trajectory_type
         }
         
         # Update enabled flags based on experiment type
@@ -184,25 +209,38 @@ class RandomizationConfig:
         return varied_components
 
 
-    def create_trajectories(self) -> List[RapidTrajectory]:
-        """Generate randomized trajectories"""
+    def create_trajectories(self) -> List[Union[RapidTrajectory, HoverTraj, CircularTraj]]:
+        """Generate trajectories based on specified type"""
         trajectories = []
         for _ in range(self.num_trials):
-            pos0 = np.array([0, 0, 0])
-            vel0 = np.array([0, 0, 0])
-            acc0 = np.array([0, 0, 0])
-            gravity = np.array([0, 0, -9.81])
-            
-            trajectory = RapidTrajectory(pos0, vel0, acc0, gravity)
-            posf = np.random.uniform(*self.traj_pos_range, size=3)
-            velf = np.random.uniform(*self.traj_vel_range, size=3)
-            accf = np.random.uniform(*self.traj_acc_range, size=3)
-            
-            trajectory.set_goal_position(posf)
-            trajectory.set_goal_velocity(velf)
-            trajectory.set_goal_acceleration(accf)
-            trajectory.generate(self.traj_time)
+            if self.trajectory_type == TrajectoryType.RANDOM:
+                # Current random motion primitive
+                pos0 = np.array([0, 0, 0])
+                vel0 = np.array([0, 0, 0])
+                acc0 = np.array([0, 0, 0])
+                gravity = np.array([0, 0, -9.81])
+                
+                trajectory = RapidTrajectory(pos0, vel0, acc0, gravity)
+                posf = np.random.uniform(*self.traj_pos_range, size=3)
+                velf = np.random.uniform(*self.traj_vel_range, size=3)
+                accf = np.random.uniform(*self.traj_acc_range, size=3)
+                
+                trajectory.set_goal_position(posf)
+                trajectory.set_goal_velocity(velf)
+                trajectory.set_goal_acceleration(accf)
+                trajectory.generate(self.traj_time)
+                
+            elif self.trajectory_type == TrajectoryType.HOVER:
+                # Hover at random point
+                trajectory = HoverTraj()
+                
+            elif self.trajectory_type == TrajectoryType.CIRCLE:
+                
+                trajectory = CircularTraj(radius=2)
+            else:
+                raise ValueError(f"Invalid trajectory type: {self.trajectory_type}")
             trajectories.append(trajectory)
+            
         return trajectories
     
     def create_wind_profiles(self) -> List[Optional[DrydenGust]]:
