@@ -10,7 +10,7 @@ from scipy.spatial.transform import Rotation
 from controller.controller_template import MultirotorControlTemplate
 from controller.quadrotor_util import *
 from controller.geometric_control import GeoControl
-
+from rotorpy.controllers.quadrotor_control import SE3Control
 
 class INDIAdaptiveController(MultirotorControlTemplate):
     def __init__(self, vehicle_params, dt=0.01):
@@ -29,7 +29,8 @@ class INDIAdaptiveController(MultirotorControlTemplate):
         self.mu = 1e-7
 
         # High-level Control
-        self.high_level_control = GeoControl(vehicle_params)
+        self.high_level_control = SE3Control(vehicle_params)
+        # self.high_level_control = GeoControl(vehicle_params)
 
         self.last_cmd_motor_speeds = np.zeros((4,1))
         self.last_meas_motor_speeds = np.zeros((4,1))
