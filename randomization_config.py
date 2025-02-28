@@ -7,12 +7,10 @@ from rotorpy.trajectories.hover_traj import HoverTraj
 from rotorpy.trajectories.circular_traj import CircularTraj
 from rotorpy.wind.dryden_winds import DrydenGust
 
-    
+# TODO retrain nn
 # TODO latency
-# TODO model uncertainty type (Uniform and Scale)
-# TODO tune base controller
-# TODO more elegant on rotor efficiency rather than just hard scale cmd_spd
 # TODO parallel of NN controller (to pytorch)
+# TODO indi-a low-pass filter
 class ExperimentType(Enum):
     """Enum for different experiment types"""
     NO = 'no'  # No randomization or disturbances
@@ -52,6 +50,10 @@ class TrajectoryType(Enum):
     
     def __str__(self):
         return self.value
+    
+class UncertantyType(Enum):
+    UNIFORM = 'uniform'
+    SCALED = 'scaled'
 
 @dataclass
 class RandomizationConfig:
@@ -60,25 +62,27 @@ class RandomizationConfig:
     quad_params: Dict[str, Any]
     seed: Optional[int] = None
     experiment_type: ExperimentType = ExperimentType.NO
+    uncertainty_type: UncertantyType = UncertantyType.UNIFORM
     trajectory_type: TrajectoryType = TrajectoryType.RANDOM
     
     # Base ranges (without intensity scaling)
-    base_wind_speed_range: tuple = (-3, 3)
-    base_force_range: tuple = (-1, 1)
-    base_torque_range: tuple = (-1, 1)
-    base_mass_uncertainty: float = 0.1  # 10% variation
-    base_inertia_uncertainty: float = 0.1
-    base_rotor_efficiency_range: tuple = (0.7, 1.0)
-    base_payload_mass_ratio_range: tuple = (0.1, 0.5)
+    base_wind_speed_range: tuple = (0, 3)
+    base_force_range: tuple = (0, 1)
+    base_torque_range: tuple = (0, 0.1)
+    base_uniform_model_uncertainty: float = 0.1  # 10% variation
+    base_scaled_model_uncertainty: float = 0.1 # 10% variation
+    base_rotor_efficiency_range: tuple = (-0.3, 0.3)
+    base_payload_mass_ratio_range: tuple = (0.0, 0.5)
     
     # Current ranges (with intensity scaling)
-    wind_speed_range: tuple = (-3, 3)
-    force_range: tuple = (-1, 1)
-    torque_range: tuple = (-1, 1)
-    mass_uncertainty: float = 0.1
-    inertia_uncertainty: float = 0.1
-    rotor_efficiency_range: tuple = (0.7, 1.0)
-    payload_mass_ratio_range: tuple = (0.1, 0.5)
+    wind_speed_range: tuple = (0, 3)
+    force_range: tuple = (0, 1)
+    torque_range: tuple = (0, 0.1)
+    uniform_model_uncertainty: float = 0.1
+    scaled_model_uncertainty: float = 0.1
+    scaled_model_uncertainty_noise: float = 0.2
+    rotor_efficiency_range: tuple = (-0.3, 0.3)
+    payload_mass_ratio_range: tuple = (0.0, 0.5)
     
     # Fixed ranges (not affected by intensity)
     wind_sigma_range: tuple = (30, 60)
@@ -95,6 +99,11 @@ class RandomizationConfig:
     controller_uncertainty_enabled: bool = False
     rotor_efficiency_enabled: bool = False
     payload_enabled: bool = False
+
+    def __post_init__(self):
+        """Initialize random seed if provided"""
+        if self.seed is not None:
+            np.random.seed(self.seed)
 
     @classmethod
     def from_experiment_type(cls, experiment_type: Union[str, ExperimentType], 
@@ -147,34 +156,32 @@ class RandomizationConfig:
         """Scale the ranges based on intensity and experiment type"""
         if intensity <= 0:
             raise ValueError("Intensity must be positive")
-        
-        if intensity == 1.0:
-            return
             
         if self.experiment_type == ExperimentType.WIND:
             # Only scale wind speed
             max_wind = self.base_wind_speed_range[1] * intensity
-            self.wind_speed_range = (-max_wind, max_wind)
+            self.wind_speed_range = (0, max_wind)
             
         elif self.experiment_type == ExperimentType.FORCE:
             # Only scale force
             max_force = self.base_force_range[1] * intensity
-            self.force_range = (-max_force, max_force)
+            self.force_range = (0, max_force)
             
         elif self.experiment_type == ExperimentType.TORQUE:
             # Only scale torque
             max_torque = self.base_torque_range[1] * intensity
-            self.torque_range = (-max_torque, max_torque)
+            self.torque_range = (0, max_torque)
             
         elif self.experiment_type == ExperimentType.UNCERTAINTY:
-            # Only scale uncertainties
-            self.mass_uncertainty = self.base_mass_uncertainty * intensity
-            self.inertia_uncertainty = self.base_inertia_uncertainty * intensity
+            # Only do scaled uncertainties 
+            self.uncertainty_type = UncertantyType.SCALED
+            self.scaled_model_uncertainty = self.base_scaled_model_uncertainty * intensity
             
         elif self.experiment_type == ExperimentType.ROTOR_EFFICIENCY:
             # Only scale rotor efficiency
-            min_efficiency = max(0.1, self.base_rotor_efficiency_range[0] / intensity)
-            self.rotor_efficiency_range = (min_efficiency, 1.0)
+            min_efficiency = max(-0.6, -intensity)
+            max_efficiency = min(0.6, intensity)
+            self.rotor_efficiency_range = (min_efficiency, max_efficiency)
             
         elif self.experiment_type == ExperimentType.PAYLOAD:
             # Only scale payload mass
@@ -235,8 +242,9 @@ class RandomizationConfig:
                 trajectory = HoverTraj()
                 
             elif self.trajectory_type == TrajectoryType.CIRCLE:
-                
-                trajectory = CircularTraj(radius=2)
+                # Create circle with center at (-radius, 0, 0) so it starts at (0,0,0)
+                radius = 2
+                trajectory = CircularTraj(center=np.array([-radius, 0, 0]), radius=radius)
             else:
                 raise ValueError(f"Invalid trajectory type: {self.trajectory_type}")
             trajectories.append(trajectory)
@@ -250,17 +258,16 @@ class RandomizationConfig:
             
         wind_profiles = []
         for _ in range(self.num_trials):
-            wx = np.random.uniform(*self.wind_speed_range)
-            wy = np.random.uniform(*self.wind_speed_range)
-            wz = np.random.uniform(*self.wind_speed_range)
-            sx = np.random.uniform(*self.wind_sigma_range)
-            sy = np.random.uniform(*self.wind_sigma_range)
-            sz = np.random.uniform(*self.wind_sigma_range)
+            spd = np.random.uniform(*self.wind_speed_range)
+            dir = np.random.uniform(-1,1, size=3)
+            dir = dir / np.linalg.norm(dir)
+            w = spd * dir
+            s = np.random.uniform(*self.wind_sigma_range, size=3)
             
             wind_profile = DrydenGust(
                 dt=1/100,
-                avg_wind=np.array([wx, wy, wz]),
-                sig_wind=np.array([sx, sy, sz])
+                avg_wind=w,
+                sig_wind=s
             )
             wind_profiles.append(wind_profile)
         return wind_profiles
@@ -273,7 +280,7 @@ class RandomizationConfig:
             
             # Apply rotor efficiency to vehicle parameters
             if self.rotor_efficiency_enabled:
-                params['rotor_efficiency'] = np.random.uniform(*self.rotor_efficiency_range, size=4)
+                params['rotor_efficiency'] += np.random.uniform(*self.rotor_efficiency_range, size=4)
             
             vehicle_params_list.append(params)
         return vehicle_params_list
@@ -308,15 +315,23 @@ class RandomizationConfig:
     
     def create_ext_force(self) -> Optional[np.ndarray]:
         """Generate randomized external forces"""
-        if not self.ext_force_enabled:
-            return None
-        return np.random.uniform(*self.force_range, size=(self.num_trials, 3))
+        ext_force = np.zeros((self.num_trials, 3))
+        if self.payload_enabled:
+            payload_force, _ = self.create_payload_disturbance()
+            ext_force += payload_force
+        if self.ext_force_enabled:
+            ext_force += np.random.uniform(*self.force_range, size=(self.num_trials, 3))
+        return ext_force
     
     def create_ext_torque(self) -> Optional[np.ndarray]:
         """Generate randomized external torques"""
-        if not self.ext_torque_enabled:
-            return None
-        return np.random.uniform(*self.torque_range, size=(self.num_trials, 3))
+        ext_torque = np.zeros((self.num_trials, 3))
+        if self.payload_enabled:
+            _, payload_torque = self.create_payload_disturbance()
+            ext_torque += payload_torque
+        if self.ext_torque_enabled:
+            ext_torque += np.random.uniform(*self.torque_range, size=(self.num_trials, 3))
+        return ext_torque
     
     def create_controller_params(self, base_params: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Generate controller parameters with uncertainty"""
@@ -324,16 +339,71 @@ class RandomizationConfig:
         for _ in range(self.num_trials):
             params = base_params.copy()
             if self.controller_uncertainty_enabled:
-                params['Ixx'] *= (1 + np.random.normal(0, self.inertia_uncertainty))
-                params['Iyy'] *= (1 + np.random.normal(0, self.inertia_uncertainty))
-                params['Izz'] *= (1 + np.random.normal(0, self.inertia_uncertainty))
-                if 'mass' in params:
-                    params['mass'] *= (1 + np.random.normal(0, self.mass_uncertainty))
-            controller_params_list.append(params)
-        return controller_params_list
+                if self.uncertainty_type == UncertantyType.UNIFORM:
+                    original_arm_length = base_params['arm_length']
+                    for key, value in params.items():
+                        if key in ['mass', 'Ixx', 'Iyy', 'Izz', 'arm_length', 'c_Dx', 'c_Dy', 'c_Dz', 
+                                'rotor_speed_min', 'rotor_speed_max', 'k_eta', 'k_m', 'k_d', 'k_z',
+                                'k_flap', 'cd1_x', 'cd1_y', 'cd1_z', 'cdz_h']:
+                            params[key] *= (1 + np.random.uniform(0, self.uniform_model_uncertainty))
 
-    def __post_init__(self):
-        """Initialize random seed if provided"""
-        if self.seed is not None:
-            np.random.seed(self.seed)
+                    params['rotor_pos'] = {rotor_key: rotor_value * params['arm_length'] / base_params['arm_length'] 
+                                         for rotor_key, rotor_value in params['rotor_pos'].items()}
+                else: # Scaled Uncertainty
+                    
+                    # scaling constant 
+                    c = np.random.uniform(-self.scaled_model_uncertainty, self.scaled_model_uncertainty)
+
+                    # Linear scaling componnets
+                    params['arm_length'] = (1 + c) * base_params['arm_length']
+                    kappa = (1+c) * base_params['k_m'] / base_params['k_eta']
+                    params['k_d'] = (1+c) * base_params['k_d']
+                    params['k_z'] = (1+c) * base_params['k_z']
+                    params['k_flap'] = (1+c) * base_params['k_flap']
+                    params['rotor_speed_max'] = (1+c) * base_params['rotor_speed_max']
+                    
+                    # Calculate scaling factors
+                    l_to_m = (1 + c)**3  # mass scales with L^3
+                    I_to_m = (1 + c)**5  # inertia scales with L^5 
+                    cd_to_m = (1 + c)**2  # drag coefficients scale with L^2
+                    
+                    # k_eta calculation using exponential formula
+                    # fitted with (crazyfile, humming bird, Agilicious, and 2 lab custom quadrotors)
+                    params['k_eta'] = max(1, 2.24e-8 * np.exp(32.78*params['arm_length']))
+                    
+                    # Apply scaling to other parameters
+                    params['mass'] = base_params['mass'] * l_to_m
+                    params['Ixx'] = base_params['Ixx'] * I_to_m
+                    params['Iyy'] = base_params['Iyy'] * I_to_m
+                    params['Izz'] = base_params['Izz'] * I_to_m
+                    params['cd1x'] = base_params['cd1x'] * cd_to_m
+                    params['cd1y'] = base_params['cd1y'] * cd_to_m
+                    params['cd1z'] = base_params['cd1z'] * cd_to_m
+                    params['cdz_h'] = base_params['cdz_h'] * cd_to_m
+                    params['c_Dx'] = base_params['c_Dx'] * cd_to_m
+                    params['c_Dy'] = base_params['c_Dy'] * cd_to_m
+                    params['c_Dz'] = base_params['c_Dz'] * cd_to_m
+                    params['k_m'] = kappa * params['k_eta']
+
+                    # Apply uniform ±20% noise to all scaled parameters
+                    noise_params = [
+                        'arm_length', 'k_d', 'k_z', 'k_flap', 'rotor_speed_max',
+                        'mass', 'Ixx', 'Iyy', 'Izz',
+                        'cd1x', 'cd1y', 'cd1z', 'cdz_h',
+                        'c_Dx', 'c_Dy', 'c_Dz',
+                        'k_eta', 'k_m'
+                    ]
+                    
+                    for key in noise_params:
+                        noise = np.random.uniform(-self.scaled_model_uncertainty_noise, self.scaled_model_uncertainty_noise)  # ±20% uniform noise
+                        params[key] *= (1 + noise)
+                    
+                    # Update rotor positions
+                    params['rotor_pos'] = {rotor_key: rotor_value * params['arm_length'] / base_params['arm_length'] 
+                                         for rotor_key, rotor_value in params['rotor_pos'].items()}
+                    
+
+            controller_params_list.append(params)
+        
+        return controller_params_list
     

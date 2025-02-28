@@ -16,7 +16,7 @@ from rotorpy.world import World
 from rotorpy.environments import Environment
 from rotorpy.wind.dryden_winds import DrydenGust
 
-from parallel_data_collection import generate_data,compute_cost
+from utils.parallel_data_collection import generate_data,compute_cost
 
 import time
 import os
@@ -28,6 +28,9 @@ import argparse
 import matplotlib.pyplot as plt
 from pathlib import Path
 from randomization_config import RandomizationConfig, ExperimentType
+import seaborn as sns
+from matplotlib import rcParams
+from utils.plotting_utils import *
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -35,8 +38,8 @@ def parse_args():
                        help='controller types: geo, geo-a, l1geo, l1mpc, indi-a, xadap, mpc, all')
     parser.add_argument('--experiment', type=str, default='no', 
                        choices=[e.value for e in ExperimentType],
-                       help='experiment type: no, wind, uncertainty, force, torque, rotoreff, all')
-    parser.add_argument('--num_trials', type=int, default=100)
+                       help='experiment type: no, wind, uncertainty, force, torque, rotoreff')
+    parser.add_argument('--num_trials', type=int, default=100, help='number of trials to run')
     parser.add_argument('--seed', type=int, default=42, 
                        help='seed for random number generator')
     parser.add_argument('--save_trials', action='store_true',
@@ -197,14 +200,16 @@ def update_stats_csv(controller_name, experiment_type, success_rate, avg_pos_err
     except Exception as exp:
         print(f"Error updating stats file: {exp}")
 
-def visualize_trials(world, vehicles, controllers, controller_types, wind_profiles, trajectory, ext_force=None, ext_torque=None):
+def visualize_trials(experiment_type, vehicles, controllers, controller_types, wind_profiles, trajectory, ext_force=None, ext_torque=None):
     """Run trials for multiple controllers and create comparison plots"""
-    
-    
     sim_results = []
+    controller_palette = sns.color_palette("husl", len(controller_types))
+    disturbance_palette = sns.color_palette("Set1", 3)
     
     # Run simulation for each controller
     for vehicle, controller in zip(vehicles, controllers):
+        if 'ModelPredictiveControl' in str(controller.__class__):
+            controller.update_trajectory(trajectory)
         sim_instance = Environment(
             vehicle=vehicle, 
             controller=controller,
@@ -221,11 +226,6 @@ def visualize_trials(world, vehicles, controllers, controller_types, wind_profil
               'w': np.zeros(3,),
               'wind': np.array([0,0,0]),
               'rotor_speeds': np.array([0,0,0,0])}
-        
-        # check if the class belongs to a MPC
-        if 'ModelPredictiveControl' in str(controller.__class__):
-            controller.update_trajectory(trajectory)
-            sim_instance.vehicle.initial_state = x0
 
         # Run simulation without built-in visualization
         sim_result = sim_instance.run(
@@ -238,70 +238,29 @@ def visualize_trials(world, vehicles, controllers, controller_types, wind_profil
         )
         sim_results.append(sim_result)
 
-    # Create comparison plots
-    fig = plt.figure(figsize=(15, 10))
+    if experiment_type != 'rotoreff':
+        fig = plt.figure(figsize=(6, 8))
+        gs = fig.add_gridspec(4, 1, height_ratios=[3, 1, 1, 1])
+        
+        ax1 = fig.add_subplot(gs[0], projection='3d')
+        plot_3d_trajectory(ax1, sim_results, controller_types, controller_palette)
+        
+        ax2 = fig.add_subplot(gs[1])
+        plot_position_error(ax2, sim_results, controller_types, controller_palette)
+        
+        ax3 = fig.add_subplot(gs[2])
+        plot_disturbance(ax3, sim_results[0], experiment_type, disturbance_palette)
+        
+        ax4 = fig.add_subplot(gs[3])
+        plot_motor_speeds(ax4, sim_results, controller_types, controller_palette)
+    else:
+        fig = plot_rotor_efficiency_comparison(sim_results, controller_types)
     
-    # 3D Trajectory Plot
-    ax1 = fig.add_subplot(221, projection='3d')
-    # Plot desired trajectory
-    x_des = sim_results[0]['flat']['x']
-    ax1.plot(x_des[:,0], x_des[:,1], x_des[:,2], 'k--', label='Desired')
-    
-    # Plot actual trajectories
-    for result, ctrl_type in zip(sim_results, controller_types):
-        x = result['state']['x']
-        ax1.plot(x[:,0], x[:,1], x[:,2], label=ctrl_type)
-    
-    ax1.set_xlabel('X [m]')
-    ax1.set_ylabel('Y [m]')
-    ax1.set_zlabel('Z [m]')
-    ax1.set_title('3D Trajectory')
-    ax1.legend()
-
-    # Position Error Plot
-    ax2 = fig.add_subplot(222)
-    for result, ctrl_type in zip(sim_results, controller_types):
-        x = result['state']['x']
-        pos_error = np.linalg.norm(x - x_des, axis=1)
-        time = result['time']
-        ax2.plot(time, pos_error, label=ctrl_type)
-    
-    ax2.set_xlabel('Time [s]')
-    ax2.set_ylabel('Position Error [m]')
-    ax2.set_title('Position Error vs Time')
-    ax2.legend()
-    ax2.grid(True)
-
-    # Attitude Error Plot
-    ax3 = fig.add_subplot(223)
-    for result, ctrl_type in zip(sim_results, controller_types):
-        q = result['state']['q']
-        yaw_des = result['flat']['yaw']
-        euler = Rotation.from_quat(q).as_euler('xyz', degrees=True)
-        yaw_error = np.abs(euler[:,2] - np.rad2deg(yaw_des))
-        time = result['time']
-        ax3.plot(time, yaw_error, label=ctrl_type)
-    
-    ax3.set_xlabel('Time [s]')
-    ax3.set_ylabel('Yaw Error [deg]')
-    ax3.set_title('Yaw Error vs Time')
-    ax3.legend()
-    ax3.grid(True)
-
-    # Motor Commands Plot
-    ax4 = fig.add_subplot(224)
-    for result, ctrl_type in zip(sim_results, controller_types):
-        motor_speeds = result['control']['cmd_motor_speeds']
-        time = result['time']
-        ax4.plot(time, motor_speeds.mean(axis=1), label=ctrl_type)
-    
-    ax4.set_xlabel('Time [s]')
-    ax4.set_ylabel('Average Motor Speed [rad/s]')
-    ax4.set_title('Motor Commands vs Time')
-    ax4.legend()
-    ax4.grid(True)
-
-    plt.tight_layout()
+    plt.tight_layout(h_pad=1.0, w_pad=1.0)
+    plot_dir = os.path.dirname(__file__)+ f'/data/plots'
+    os.makedirs(plot_dir, exist_ok=True)
+    plt.savefig(f'{plot_dir}/vis_{experiment_type}_{"_".join(controller_types)}.png', 
+                dpi=300, bbox_inches='tight')
     plt.show()
 
     # Print performance metrics for each controller
@@ -339,7 +298,7 @@ def run_when2fail(args, controllers_to_run):
     base_components = config.create_base_components()
     
     # Start with original intensity
-    intensity = 1
+    intensity = args.intensity_step
     active_controllers = controllers_to_run.copy()
     
     while intensity <= args.max_intensity and active_controllers:
@@ -423,7 +382,7 @@ def run_when2fail(args, controllers_to_run):
         plt.plot(intensities[ctrl], 
                 success_rates[ctrl], marker='o', label=ctrl)
     plt.xlabel('Disturbance Intensity Multiplier')
-    plt.ylabel('Success Rate (%)')
+    plt.ylabel('Success Rate (\%)')
     plt.title('Success Rate vs Disturbance Intensity')
     plt.grid(True)
     plt.legend()
@@ -451,6 +410,10 @@ def run_when2fail(args, controllers_to_run):
     plt.legend()
     
     plt.tight_layout()
+    plot_dir = os.path.dirname(__file__)+ f'/data/plots'
+    os.makedirs(plot_dir, exist_ok=True)
+    plt.savefig(f'{plot_dir}/vis_when2fail_{args.experiment}_{"_".join(controllers_to_run)}.png', 
+                dpi=300, bbox_inches='tight')
     plt.show()
     
     # Print summary
@@ -476,6 +439,7 @@ def main():
     else:
         controllers_to_run = args.controller
 
+    ModifyPlotForPublication()
     if args.when2fail:
         run_when2fail(args, controllers_to_run)
     elif args.vis:
@@ -512,7 +476,7 @@ def main():
         ]
         # Run visualization with all controllers
         sim_results = visualize_trials(
-            world,
+            args.experiment,
             [vehicles[0]] * len(controllers),  # Use same vehicle for all controllers
             controllers,
             controllers_to_run,
