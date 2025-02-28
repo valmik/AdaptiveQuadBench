@@ -23,8 +23,8 @@ class GeometricAdaptiveController(GeoControl):
         super().__init__(vehicle_params)
         
         # Adaptive control parameters
-        self.gamma_x = 0.5 #2.0  # Adaptation gain for position
-        self.gamma_R = 0.1 #10.0  # Adaptation gain for attitude
+        self.gamma_x = 1  # Adaptation gain for position
+        self.gamma_R = 0.1  # Adaptation gain for attitude
         
         # Compute c1 and c2 based on system parameters and gains
         # Position adaptation parameter c1
@@ -41,7 +41,7 @@ class GeometricAdaptiveController(GeoControl):
         self.c2 = min(c2_option1, c2_option2)
 
         
-        self.B_theta_x = 10.0  # Position parameter bound
+        self.B_theta_x = 2.0  # Position parameter bound
         self.W_x = np.eye(3)
         self.W_R = np.eye(3)
         

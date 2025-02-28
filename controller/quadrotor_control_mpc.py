@@ -34,6 +34,8 @@ class ModelPredictiveControl(MultirotorControlTemplate):
         # Initilize controls
         self.cmd_motor_forces = np.zeros((4,))
 
+        # TODO: thread safety if we want to update MPC at runtime
+
     def update_trajectory(self, trajectory):
         self.quad_mpc = QuadMPC(quad_params=self.quad_params, trajectory=trajectory, t_final=self.t_final,
                                 t_horizon=self.t_horizon, n_nodes=self.n_nodes)

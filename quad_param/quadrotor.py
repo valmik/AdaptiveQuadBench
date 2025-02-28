@@ -18,14 +18,14 @@ quad_params = {
     'num_rotors': 4,                        # for looping over each actuator
     'rotor_radius': 0.10,                   # rotor radius, in meters for visualization
     'rotor_pos': {  
-                    'r1': d*np.array([ np.sin(np.pi/4),   np.cos(np.pi/4), 0]),    # Location of Rotor 2 (front left), meters
-                    'r2': d*np.array([ np.sin(np.pi/4),  -np.cos(np.pi/4), 0]),    # Location of Rotor 1 (front right), meters
-                    'r3': d*np.array([-np.sin(np.pi/4),  -np.cos(np.pi/4), 0]),    # Location of Rotor 4 (back right), meters
-                    'r4': d*np.array([-np.sin(np.pi/4),   np.cos(np.pi/4), 0]),    # Location of Rotor 3 (back left), meters
+                    'r1': d*np.array([ np.sin(np.pi/4),   np.cos(np.pi/4), 0]),    # Location of Rotor 1 (front left), meters
+                    'r2': d*np.array([ np.sin(np.pi/4),  -np.cos(np.pi/4), 0]),    # Location of Rotor 2 (front right), meters
+                    'r3': d*np.array([-np.sin(np.pi/4),  -np.cos(np.pi/4), 0]),    # Location of Rotor 3 (back right), meters
+                    'r4': d*np.array([-np.sin(np.pi/4),   np.cos(np.pi/4), 0]),    # Location of Rotor 4 (back left), meters
                  },
 
     'rotor_directions': np.array([1,-1,1,-1]),  # This dictates the direction of the torque for each motor. 
-    'rotor_efficiency': np.array([1,1,1,1]),  # This dictates the efficiency of each motor. 
+    'rotor_efficiency': np.array([1.0,1.0,1.0,1.0]),  # This dictates the efficiency of each motor. 
 
     'rI': np.array([0,0,0]), # location of the IMU sensor, meters
 
