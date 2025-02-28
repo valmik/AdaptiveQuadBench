@@ -177,7 +177,6 @@ def update_stats_csv(controller_name, experiment_type, success_rate, avg_pos_err
         'avg_heading_error': [avg_heading_error],
         'last_updated': [pd.Timestamp.now()]
     })
-
     try:
         # Try to read existing stats
         if Path(stats_file).exists():
@@ -223,7 +222,10 @@ def visualize_trials(world, vehicles, controllers, controller_types, wind_profil
               'wind': np.array([0,0,0]),
               'rotor_speeds': np.array([0,0,0,0])}
         
-        sim_instance.vehicle.initial_state = x0
+        # check if the class belongs to a MPC
+        if 'ModelPredictiveControl' in str(controller.__class__):
+            controller.update_trajectory(trajectory)
+            sim_instance.vehicle.initial_state = x0
 
         # Run simulation without built-in visualization
         sim_result = sim_instance.run(
