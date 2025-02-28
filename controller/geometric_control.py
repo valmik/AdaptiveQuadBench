@@ -35,9 +35,17 @@ class GeoControl(MultirotorControlTemplate):
             'R': 0.3*np.ones(3).reshape(3,1),
             'W': 0.03*np.ones(3).reshape(3,1),
         }
+        #param for random trajectory, may be too aggressive
         self.k = {
-            'x': np.array([4,4,9]).reshape(3,1),
-            'v': np.array([2,2,4]).reshape(3,1),
+            'x': np.array([15,15,30]).reshape(3,1),
+            'v': np.array([4,4,8]).reshape(3,1),
+            'R': 0.3*np.ones(3).reshape(3,1),
+            'W': 0.03*np.ones(3).reshape(3,1),
+        }
+        #param for circle 
+        self.k = {
+            'x': np.array([5,5,10]).reshape(3,1),
+            'v': np.array([4,4,8]).reshape(3,1),
             'R': 0.3*np.ones(3).reshape(3,1),
             'W': 0.03*np.ones(3).reshape(3,1),
         }

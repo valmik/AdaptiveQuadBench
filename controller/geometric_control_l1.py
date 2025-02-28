@@ -32,9 +32,9 @@ class L1_GeoControl(GeoControl):
         self.dt_L1 = 1/100 # sample time for L1 AC, for simplicity, set the same as the simulation step size
 
         """ For large uncertainties ..."""
-        self.ctoffq1Thrust = 50 # cutoff frequency for thrust channel LPF (rad/s)
-        self.ctoffq1Moment = 50 # cutoff frequency for moment channels LPF1 (rad/s)
-        self.ctoffq2Moment = 50 # cutoff frequency for moment channels LPF2 (rad/s)
+        self.ctoffq1Thrust = 500 # cutoff frequency for thrust channel LPF (rad/s)
+        self.ctoffq1Moment = 500 # cutoff frequency for moment channels LPF1 (rad/s)
+        self.ctoffq2Moment = 500 # cutoff frequency for moment channels LPF2 (rad/s)
 
         self.L1_params = (self.As_v, self.As_omega, self.dt_L1, self.ctoffq1Thrust, self.ctoffq1Moment, self.ctoffq2Moment, self.mass, self.g, self.inertia )
 
