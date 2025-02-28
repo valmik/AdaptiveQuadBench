@@ -332,4 +332,8 @@ class RandomizationConfig:
             controller_params_list.append(params)
         return controller_params_list
 
+    def __post_init__(self):
+        """Initialize random seed if provided"""
+        if self.seed is not None:
+            np.random.seed(self.seed)
     
