@@ -66,8 +66,10 @@ class QuadOptimizer:
 
 
         #load your own weight matrix Q and R for state and control input
-        q_cost = np.array([10,10,10,1,1,1,1,1,1,1,1,1,1])
-        r_cost = np.array([1,1,1,1])
+        q_cost = np.array([10,10,10,10,10,10,0.1,0.1,0.1,0.1,0.01,0.01,0.01])
+        r_cost = np.array([0.01,0.01,0.01,0.01])
+        # q_cost = np.array([0.1,0.1,0.1,1,1,1,1,1,1,1,1,1,1])
+        # r_cost = np.array([0.1,0.1,0.1,0.1])
         self.T = t_horizon  # Time horizon
         self.N = n_nodes  # number of control nodes within horizon
 
