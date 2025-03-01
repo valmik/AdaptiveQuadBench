@@ -65,15 +65,6 @@ class RandomizationConfig:
     uncertainty_type: UncertantyType = UncertantyType.UNIFORM
     trajectory_type: TrajectoryType = TrajectoryType.RANDOM
     
-    # Base ranges (without intensity scaling)
-    base_wind_speed_range: tuple = (0, 3)
-    base_force_range: tuple = (0, 1)
-    base_torque_range: tuple = (0, 0.1)
-    base_uniform_model_uncertainty: float = 0.1  # 10% variation
-    base_scaled_model_uncertainty: float = 0.1 # 10% variation
-    base_rotor_efficiency_range: tuple = (-0.3, 0.3)
-    base_payload_mass_ratio_range: tuple = (0.0, 0.5)
-    
     # Current ranges (with intensity scaling)
     wind_speed_range: tuple = (0, 3)
     force_range: tuple = (0, 1)
@@ -154,28 +145,31 @@ class RandomizationConfig:
 
     def scale_ranges_with_intensity(self, intensity: float):
         """Scale the ranges based on intensity and experiment type"""
-        if intensity <= 0:
-            raise ValueError("Intensity must be positive")
+        if intensity < 0:
+            raise ValueError("Intensity must be non-negative")
+
+        if self.experiment_type == ExperimentType.NO:
+            raise ValueError("No scaling for no experiment type")
             
         if self.experiment_type == ExperimentType.WIND:
             # Only scale wind speed
-            max_wind = self.base_wind_speed_range[1] * intensity
+            max_wind = intensity
             self.wind_speed_range = (0, max_wind)
             
         elif self.experiment_type == ExperimentType.FORCE:
             # Only scale force
-            max_force = self.base_force_range[1] * intensity
+            max_force = intensity
             self.force_range = (0, max_force)
             
         elif self.experiment_type == ExperimentType.TORQUE:
             # Only scale torque
-            max_torque = self.base_torque_range[1] * intensity
+            max_torque = intensity
             self.torque_range = (0, max_torque)
             
         elif self.experiment_type == ExperimentType.UNCERTAINTY:
             # Only do scaled uncertainties 
             self.uncertainty_type = UncertantyType.SCALED
-            self.scaled_model_uncertainty = self.base_scaled_model_uncertainty * intensity
+            self.scaled_model_uncertainty = intensity
             
         elif self.experiment_type == ExperimentType.ROTOR_EFFICIENCY:
             # Only scale rotor efficiency
@@ -185,8 +179,8 @@ class RandomizationConfig:
             
         elif self.experiment_type == ExperimentType.PAYLOAD:
             # Only scale payload mass
-            max_payload = min(2.0, self.base_payload_mass_ratio_range[1] * intensity)
-            self.payload_mass_ratio_range = (self.base_payload_mass_ratio_range[0], max_payload)
+            max_payload = min(2.0, intensity)
+            self.payload_mass_ratio_range = (0, max_payload)
             
     def create_base_components(self) -> Dict[str, Any]:
         """Generate components that should stay constant across intensity variations"""
@@ -352,8 +346,7 @@ class RandomizationConfig:
                 else: # Scaled Uncertainty
                     
                     # scaling constant 
-                    c = np.random.uniform(-self.scaled_model_uncertainty, self.scaled_model_uncertainty)
-
+                    c = max(-1+0.001,np.random.uniform(-self.scaled_model_uncertainty, self.scaled_model_uncertainty))
                     # Linear scaling componnets
                     params['arm_length'] = (1 + c) * base_params['arm_length']
                     kappa = (1+c) * base_params['k_m'] / base_params['k_eta']
@@ -369,8 +362,7 @@ class RandomizationConfig:
                     
                     # k_eta calculation using exponential formula
                     # fitted with (crazyfile, humming bird, Agilicious, and 2 lab custom quadrotors)
-                    params['k_eta'] = max(1, 2.24e-8 * np.exp(32.78*params['arm_length']))
-                    
+                    params['k_eta'] = min(1, 2.24e-8 * np.exp(32.78*params['arm_length']))
                     # Apply scaling to other parameters
                     params['mass'] = base_params['mass'] * l_to_m
                     params['Ixx'] = base_params['Ixx'] * I_to_m
@@ -397,6 +389,8 @@ class RandomizationConfig:
                     for key in noise_params:
                         noise = np.random.uniform(-self.scaled_model_uncertainty_noise, self.scaled_model_uncertainty_noise)  # ±20% uniform noise
                         params[key] *= (1 + noise)
+
+                    
                     
                     # Update rotor positions
                     params['rotor_pos'] = {rotor_key: rotor_value * params['arm_length'] / base_params['arm_length'] 
