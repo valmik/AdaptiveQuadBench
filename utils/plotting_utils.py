@@ -9,6 +9,7 @@ from matplotlib import rcParams
 def ModifyPlotForPublication(text_size=10, tick_size=10, legend_size=10):
     """Set matplotlib parameters for publication quality plots"""
     rcParams['axes.labelsize'] = text_size
+    rcParams['axes.formatter.use_mathtext'] = True
     rcParams['xtick.labelsize'] = tick_size
     rcParams['ytick.labelsize'] = tick_size
     rcParams['legend.fontsize'] = legend_size

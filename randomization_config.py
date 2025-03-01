@@ -10,7 +10,7 @@ from rotorpy.wind.dryden_winds import DrydenGust
 # TODO retrain nn
 # TODO latency
 # TODO parallel of NN controller (to pytorch)
-# TODO indi-a low-pass filter
+# TODO add citation to each controller
 class ExperimentType(Enum):
     """Enum for different experiment types"""
     NO = 'no'  # No randomization or disturbances
