@@ -37,7 +37,7 @@ def plot_3d_trajectory(ax, sim_results, controller_types, controller_palette):
     ax.legend(ncol=2, loc='best')
 
 def plot_position_error(ax, sim_results, controller_types, controller_palette):
-    """Plot position tracking error"""
+    """Plot position tracking error norm for all controllers"""
     for result, ctrl_type in zip(sim_results, controller_types):
         time = result['time']
         x = result['state']['x']
@@ -65,7 +65,7 @@ def plot_disturbance(ax, result, experiment_type, disturbance_palette):
         ax.plot(time, torque[:,1], label='Y', color=disturbance_palette[1])
         ax.plot(time, torque[:,2], label='Z', color=disturbance_palette[2])
         ax.set_ylabel('Torque [Nm]')
-    else:
+    else: # force, payload, uncertainty # ? no good way to visualize single uncertainty
         force = result['state']['ext_force']
         ax.plot(time, force[:,0], label='X', color=disturbance_palette[0])
         ax.plot(time, force[:,1], label='Y', color=disturbance_palette[1])
