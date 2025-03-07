@@ -44,7 +44,9 @@ def compute_cost(sim_result):
     sim_cost = np.sqrt(np.mean(np.sum((x-x_des)**2, axis=1)))
     # Heading error - convert to euler angles
     euler_angles = Rotation.from_quat(q).as_euler('xyz', degrees=False)
+    # absolute heading error over the trajectory
     heading_error = (np.abs(euler_angles[:, 2] - yaw_des)).mean()
+
     heading_error = np.rad2deg(heading_error)
 
     return sim_cost, heading_error
@@ -79,9 +81,7 @@ def single_traj_instance(world, vehicles, controllers, wind_profiles, trajectori
     if ext_torque is not None:
         ext_torque = ext_torque[traj_id % len(ext_torque)]
 
-    # check if the class belongs to a MPC
-    if 'ModelPredictiveControl' in str(controller.__class__):
-        controller.update_trajectory(traj)
+    controller.update_trajectory(traj)
 
     # Now create an instance of the simulator and run it. 
     sim_instance = Environment(vehicle=vehicle, controller=controller, 

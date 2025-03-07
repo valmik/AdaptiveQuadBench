@@ -6,11 +6,12 @@ from rotorpy.trajectories.random_motion_prim_traj import RapidTrajectory
 from rotorpy.trajectories.hover_traj import HoverTraj
 from rotorpy.trajectories.circular_traj import CircularTraj
 from rotorpy.wind.dryden_winds import DrydenGust
+from quad_param.mini_quad import mini_quad_params
 
-# TODO retrain nn
-# TODO latency
-# TODO parallel of NN controller (to pytorch)
 # TODO add citation to each controller
+# TODO: fix when2fail plot (select 2 conditions)
+# ?????? why???? PAPER version also do not work????
+
 class ExperimentType(Enum):
     """Enum for different experiment types"""
     NO = 'no'  # No randomization or disturbances
@@ -77,7 +78,7 @@ class RandomizationConfig:
     
     # Fixed ranges (not affected by intensity)
     wind_sigma_range: tuple = (30, 60)
-    payload_offset_ratio_range: tuple = (-0.2, 0.2)
+    payload_offset_ratio_range: tuple = (-0.2,0.2)
     traj_pos_range: tuple = (-2, 2)
     traj_vel_range: tuple = (-2, 2)
     traj_acc_range: tuple = (-2, 2)
@@ -154,17 +155,17 @@ class RandomizationConfig:
         if self.experiment_type == ExperimentType.WIND:
             # Only scale wind speed
             max_wind = intensity
-            self.wind_speed_range = (0, max_wind)
+            self.wind_speed_range = (max_wind, max_wind)
             
         elif self.experiment_type == ExperimentType.FORCE:
             # Only scale force
             max_force = intensity
-            self.force_range = (0, max_force)
+            self.force_range = (max_force, max_force)
             
         elif self.experiment_type == ExperimentType.TORQUE:
             # Only scale torque
             max_torque = intensity
-            self.torque_range = (0, max_torque)
+            self.torque_range = (max_torque, max_torque)
             
         elif self.experiment_type == ExperimentType.UNCERTAINTY:
             # Only do scaled uncertainties 
@@ -180,7 +181,7 @@ class RandomizationConfig:
         elif self.experiment_type == ExperimentType.PAYLOAD:
             # Only scale payload mass
             max_payload = min(2.0, intensity)
-            self.payload_mass_ratio_range = (0, max_payload)
+            self.payload_mass_ratio_range = (max_payload, max_payload)
             
     def create_base_components(self) -> Dict[str, Any]:
         """Generate components that should stay constant across intensity variations"""
@@ -201,8 +202,7 @@ class RandomizationConfig:
         varied_components = {}
 
         varied_components['wind_profiles'] = self.create_wind_profiles()
-        varied_components['ext_force'] = self.create_ext_force()
-        varied_components['ext_torque'] = self.create_ext_torque()
+        varied_components['ext_force'], varied_components['ext_torque'] = self.create_ext_force_and_torque()
         if self.experiment_type == ExperimentType.ROTOR_EFFICIENCY or self.experiment_type == ExperimentType.UNCERTAINTY:
             varied_components['vehicle_params'] = self.create_vehicle_params(self.quad_params)
             varied_components['controller_params'] = self.create_controller_params(self.quad_params)
@@ -298,34 +298,27 @@ class RandomizationConfig:
             
             offset_ratio = np.random.uniform(*self.payload_offset_ratio_range, size=3)
             offset = offset_ratio * quad_arm_length
-            
             force = mass * gravity
-            torque = np.cross(offset, force)
-            
+            torque = np.cross(offset,force)
             payload_forces.append(force)
             payload_torques.append(torque)
             
         return np.array(payload_forces), np.array(payload_torques)
     
-    def create_ext_force(self) -> Optional[np.ndarray]:
-        """Generate randomized external forces"""
+    def create_ext_force_and_torque(self) -> tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        """Generate randomized external forces and torques"""
         ext_force = np.zeros((self.num_trials, 3))
-        if self.payload_enabled:
-            payload_force, _ = self.create_payload_disturbance()
-            ext_force += payload_force
-        if self.ext_force_enabled:
-            ext_force += np.random.uniform(*self.force_range, size=(self.num_trials, 3))
-        return ext_force
-    
-    def create_ext_torque(self) -> Optional[np.ndarray]:
-        """Generate randomized external torques"""
         ext_torque = np.zeros((self.num_trials, 3))
         if self.payload_enabled:
-            _, payload_torque = self.create_payload_disturbance()
+            payload_force, payload_torque = self.create_payload_disturbance()
+            ext_force += payload_force
             ext_torque += payload_torque
+        if self.ext_force_enabled:
+            ext_force += np.random.uniform(*self.force_range, size=(self.num_trials, 3))
         if self.ext_torque_enabled:
             ext_torque += np.random.uniform(*self.torque_range, size=(self.num_trials, 3))
-        return ext_torque
+        return ext_force, ext_torque
+
     
     def create_controller_params(self, base_params: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Generate controller parameters with uncertainty"""
@@ -339,43 +332,76 @@ class RandomizationConfig:
                         if key in ['mass', 'Ixx', 'Iyy', 'Izz', 'arm_length', 'c_Dx', 'c_Dy', 'c_Dz', 
                                 'rotor_speed_min', 'rotor_speed_max', 'k_eta', 'k_m', 'k_d', 'k_z',
                                 'k_flap', 'cd1_x', 'cd1_y', 'cd1_z', 'cdz_h']:
-                            params[key] *= (1 + np.random.uniform(0, self.uniform_model_uncertainty))
+                            params[key] *= (1 + np.random.uniform(-self.uniform_model_uncertainty, self.uniform_model_uncertainty))
 
                     params['rotor_pos'] = {rotor_key: rotor_value * params['arm_length'] / base_params['arm_length'] 
                                          for rotor_key, rotor_value in params['rotor_pos'].items()}
                 else: # Scaled Uncertainty
+                    # ! paper version rand
+                    # c = max(-0.5, np.random.uniform(0.5 - self.scaled_model_uncertainty, 0.5 + self.scaled_model_uncertainty))
+                    # c = np.random.uniform(-0.25,1.25)
+                    c = 0
+                    params['arm_length'] = c* (base_params['arm_length'] - mini_quad_params['arm_length']) + mini_quad_params['arm_length']
+                    kappa_large = base_params['k_m'] / base_params['k_eta']
+                    kappa_mini = mini_quad_params['k_m'] / mini_quad_params['k_eta']
+                    kappa = c * (kappa_large - kappa_mini) + kappa_mini
+                    params['k_d'] = c * (base_params['k_d'] - mini_quad_params['k_d']) + mini_quad_params['k_d']
+                    params['k_z'] = c * (base_params['k_z'] - mini_quad_params['k_z']) + mini_quad_params['k_z']
+                    params['k_flap'] = c * (base_params['k_flap'] - mini_quad_params['k_flap']) + mini_quad_params['k_flap']
+                    params['rotor_speed_max'] = c * (base_params['rotor_speed_max'] - mini_quad_params['rotor_speed_max']) + mini_quad_params['rotor_speed_max']
+
+                    l_to_m = (params['arm_length']**3 - mini_quad_params['arm_length']**3) / (base_params['arm_length']**3 - mini_quad_params['arm_length']**3)
+                    I_to_m = (params['arm_length']**5 - mini_quad_params['arm_length']**5) / (base_params['arm_length']**5 - mini_quad_params['arm_length']**5)
+                    cd_to_m = (params['arm_length']**2 - mini_quad_params['arm_length']**2) / (base_params['arm_length']**2 - mini_quad_params['arm_length']**2)
                     
-                    # scaling constant 
-                    c = max(-1+0.001,np.random.uniform(-self.scaled_model_uncertainty, self.scaled_model_uncertainty))
-                    # Linear scaling componnets
-                    params['arm_length'] = (1 + c) * base_params['arm_length']
-                    kappa = (1+c) * base_params['k_m'] / base_params['k_eta']
-                    params['k_d'] = (1+c) * base_params['k_d']
-                    params['k_z'] = (1+c) * base_params['k_z']
-                    params['k_flap'] = (1+c) * base_params['k_flap']
-                    params['rotor_speed_max'] = (1+c) * base_params['rotor_speed_max']
-                    
-                    # Calculate scaling factors
-                    l_to_m = (1 + c)**3  # mass scales with L^3
-                    I_to_m = (1 + c)**5  # inertia scales with L^5 
-                    cd_to_m = (1 + c)**2  # drag coefficients scale with L^2
-                    
-                    # k_eta calculation using exponential formula
-                    # fitted with (crazyfile, humming bird, Agilicious, and 2 lab custom quadrotors)
-                    params['k_eta'] = min(1, 2.24e-8 * np.exp(32.78*params['arm_length']))
-                    # Apply scaling to other parameters
-                    params['mass'] = base_params['mass'] * l_to_m
-                    params['Ixx'] = base_params['Ixx'] * I_to_m
-                    params['Iyy'] = base_params['Iyy'] * I_to_m
-                    params['Izz'] = base_params['Izz'] * I_to_m
-                    params['cd1x'] = base_params['cd1x'] * cd_to_m
-                    params['cd1y'] = base_params['cd1y'] * cd_to_m
-                    params['cd1z'] = base_params['cd1z'] * cd_to_m
-                    params['cdz_h'] = base_params['cdz_h'] * cd_to_m
-                    params['c_Dx'] = base_params['c_Dx'] * cd_to_m
-                    params['c_Dy'] = base_params['c_Dy'] * cd_to_m
-                    params['c_Dz'] = base_params['c_Dz'] * cd_to_m
+                    params['k_eta'] = np.exp(c * (np.log(base_params['k_eta']) - np.log(mini_quad_params['k_eta'])) + np.log(mini_quad_params['k_eta']))
+                    params['mass'] = c * (base_params['mass'] - mini_quad_params['mass']) + mini_quad_params['mass']
+                    params['Ixx'] = c * (base_params['Ixx'] - mini_quad_params['Ixx']) + mini_quad_params['Ixx']
+                    params['Iyy'] = c * (base_params['Iyy'] - mini_quad_params['Iyy']) + mini_quad_params['Iyy']
+                    params['Izz'] = c * (base_params['Izz'] - mini_quad_params['Izz']) + mini_quad_params['Izz']
+                    params['cd1x'] = c * (base_params['cd1x'] - mini_quad_params['cd1x']) + mini_quad_params['cd1x']
+                    params['cd1y'] = c * (base_params['cd1y'] - mini_quad_params['cd1y']) + mini_quad_params['cd1y']
+                    params['cd1z'] = c * (base_params['cd1z'] - mini_quad_params['cd1z']) + mini_quad_params['cd1z']
+                    params['cdz_h'] = c * (base_params['cdz_h'] - mini_quad_params['cdz_h']) + mini_quad_params['cdz_h']
+                    params['c_Dx'] = c * (base_params['c_Dx'] - mini_quad_params['c_Dx']) + mini_quad_params['c_Dx']
+                    params['c_Dy'] = c * (base_params['c_Dy'] - mini_quad_params['c_Dy']) + mini_quad_params['c_Dy']
+                    params['c_Dz'] = c * (base_params['c_Dz'] - mini_quad_params['c_Dz']) + mini_quad_params['c_Dz']
                     params['k_m'] = kappa * params['k_eta']
+
+                    # ! bench version rand
+                    # # scaling constant 
+                    # c = max(-1+0.001,np.random.uniform(-self.scaled_model_uncertainty, self.scaled_model_uncertainty))
+                    # # Linear scaling componnets
+                    # params['arm_length'] = (1 + c) * base_params['arm_length']
+                    # kappa = (1+c) * base_params['k_m'] / base_params['k_eta']
+                    # params['k_d'] = (1+c) * base_params['k_d']
+                    # params['k_z'] = (1+c) * base_params['k_z']
+                    # params['k_flap'] = (1+c) * base_params['k_flap']
+                    # params['rotor_speed_max'] = (1+c) * base_params['rotor_speed_max']
+                    
+                    # # Calculate scaling factors
+                    # l_to_m = (1 + c)**3  # mass scales with L^3
+                    # I_to_m = (1 + c)**5  # inertia scales with L^5 
+                    # cd_to_m = (1 + c)**2  # drag coefficients scale with L^2
+                    
+                    # # k_eta calculation using exponential formula
+                    # # fitted with (crazyfile, humming bird, Agilicious, and 2 lab custom quadrotors)
+                    # # params['k_eta'] = min(1, 5.385e-8 * np.exp(4.73*c))
+                    # # params['k_eta'] = min(1, 5.385e-8 * np.exp(4.73*c))
+                    # # params['k_eta'] = min(1, 4.32e-8 * np.exp(5.1753*c))
+                    # # Apply scaling to other parameters
+                    # params['mass'] = base_params['mass'] * l_to_m
+                    # params['Ixx'] = base_params['Ixx'] * I_to_m
+                    # params['Iyy'] = base_params['Iyy'] * I_to_m
+                    # params['Izz'] = base_params['Izz'] * I_to_m
+                    # params['cd1x'] = base_params['cd1x'] * cd_to_m
+                    # params['cd1y'] = base_params['cd1y'] * cd_to_m
+                    # params['cd1z'] = base_params['cd1z'] * cd_to_m
+                    # params['cdz_h'] = base_params['cdz_h'] * cd_to_m
+                    # params['c_Dx'] = base_params['c_Dx'] * cd_to_m
+                    # params['c_Dy'] = base_params['c_Dy'] * cd_to_m
+                    # params['c_Dz'] = base_params['c_Dz'] * cd_to_m
+                    # params['k_m'] = kappa * params['k_eta']
 
                     # Apply uniform ±20% noise to all scaled parameters
                     noise_params = [

@@ -67,8 +67,7 @@ class ExperimentRunner:
     def _generate_components(self, config):
         trajectories = config.create_trajectories()
         wind_profiles = config.create_wind_profiles()
-        ext_force = config.create_ext_force()
-        ext_torque = config.create_ext_torque()
+        ext_force, ext_torque = config.create_ext_force_and_torque()
         vehicle_params_list = config.create_vehicle_params(quad_params)
         vehicles = [Multirotor(params) for params in vehicle_params_list]
         controller_params_list = config.create_controller_params(quad_params)
@@ -102,8 +101,7 @@ class ExperimentRunner:
         # Run simulations and collect results
         sim_results = []
         for vehicle, controller in zip([components['vehicles'][0]] * len(controllers), controllers):
-            if 'ModelPredictiveControl' in str(controller.__class__):
-                controller.update_trajectory(components['trajectories'][0])
+            controller.update_trajectory(components['trajectories'][0])
             
             sim_instance = Environment(
                 vehicle=vehicle, 
@@ -138,7 +136,8 @@ class ExperimentRunner:
         self.visualizer.visualize_trials(
             experiment_type=self.config.experiment_type,
             sim_results=sim_results,
-            controller_types=self.config.controller_types
+            controller_types=self.config.controller_types,
+            controller_param=components['controller_params'][0]
         )
 
     def _run_when2fail(self):

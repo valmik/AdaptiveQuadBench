@@ -70,14 +70,18 @@ class ResultsManager:
         pos_tracking_error_success = df['pos_tracking_error'] < 5
         
         avg_pos_error = df['pos_tracking_error'][pos_tracking_error_success].mean()
+        std_pos_error = df['pos_tracking_error'][pos_tracking_error_success].std()
         avg_heading_error = df['heading_error'][pos_tracking_error_success].mean()
+        std_heading_error = df['heading_error'][pos_tracking_error_success].std()
         
         print("--------------------------------")
         print(f"Controller: {controller_name}")
         print("--------------------------------")
         print(f"Success rate: {success_rate:.2f}%")
         print(f"Average pos_tracking_error: {avg_pos_error:.2f} m")
+        print(f"Std pos_tracking_error: {std_pos_error:.2f} m")
         print(f"Average heading_error: {avg_heading_error:.2f} deg")
+        print(f"Std heading_error: {std_heading_error:.2f} deg")
         print("--------------------------------")
 
         self._update_stats_csv(
@@ -85,11 +89,13 @@ class ResultsManager:
             experiment_type,
             success_rate,
             avg_pos_error,
-            avg_heading_error
+            avg_heading_error,
+            std_pos_error,
+            std_heading_error
         )
 
     def _update_stats_csv(self, controller_name, experiment_type, success_rate, 
-                         avg_pos_error, avg_heading_error):
+                         avg_pos_error, avg_heading_error, std_pos_error, std_heading_error):
         stats_file = self.data_dir / 'controller_stats.csv'
         
         new_stats = pd.DataFrame({
@@ -97,7 +103,9 @@ class ResultsManager:
             'experiment': [experiment_type],
             'success_rate': [success_rate],
             'avg_position_error': [avg_pos_error],
+            'std_position_error': [std_pos_error],
             'avg_heading_error': [avg_heading_error],
+            'std_heading_error': [std_heading_error],
             'last_updated': [pd.Timestamp.now()]
         })
         

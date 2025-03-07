@@ -9,7 +9,6 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 from controller.controller_template import MultirotorControlTemplate
 from controller.quadrotor_util import *
-from controller.geometric_control import GeoControl
 from rotorpy.controllers.quadrotor_control import SE3Control
 from scipy.signal import butter
 from collections import deque
@@ -111,7 +110,6 @@ class INDIAdaptiveController(MultirotorControlTemplate):
             'cmd_moment': high_level_control_input['cmd_moment'],
             'cmd_q': high_level_control_input['cmd_q'],
             'cmd_w': high_level_control_input['cmd_w'],
-            'cmd_v': high_level_control_input['cmd_v']
         }
         
         return control_input

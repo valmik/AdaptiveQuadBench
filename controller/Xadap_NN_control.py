@@ -9,6 +9,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 from controller.controller_template import MultirotorControlTemplate
 from controller.geometric_control import GeoControl
+from controller.quadrotor_control_mpc import ModelPredictiveControl
 from rotorpy.controllers.quadrotor_control import SE3Control
 
 import numpy as np
@@ -49,13 +50,13 @@ class PickableInferenceSession:
         self.sess = init_session(self.model_path)
 
 class Model:
-    def __init__(self, base_model_path='mlp_1011.onnx', adap_module_path='encoder_1011.onnx', model_rms_path=None):
+    def __init__(self, base_model_path='mlp_1014.onnx', adap_module_path='encoder_1014.onnx', model_rms_path=None):
         current_path = os.path.dirname(os.path.abspath(__file__)) + '/models/Xadap/'
         self.base_model_path = current_path+base_model_path
         self.adap_module_path = current_path+adap_module_path
         
-        self.obs_mean = np.loadtxt(current_path+'mean_1011.csv', delimiter=" ")
-        self.obs_var = np.loadtxt(current_path+'var_1011.csv', delimiter=" ")
+        self.obs_mean = np.loadtxt(current_path+'mean_1014.csv', delimiter=" ")
+        self.obs_var = np.loadtxt(current_path+'var_1014.csv', delimiter=" ")
 
         self.act_mean = np.array([1.0 / 2, 1.0 / 2,
                                 1.0 / 2, 1.0 / 2])[np.newaxis, :]
@@ -227,8 +228,12 @@ class Xadap_NN_control(MultirotorControlTemplate):
     def __init__(self, vehicle_params):
         super().__init__(vehicle_params)
         self.high_level_control = SE3Control(vehicle_params)
+        # self.high_level_control = ModelPredictiveControl(vehicle_params)
         self.low_level_control = XAdapLowLevelControl()
         self.low_level_control.set_max_motor_spd(self.rotor_speed_max)
+
+    def update_trajectory(self, trajectory):
+        self.high_level_control.update_trajectory(trajectory)
 
     def update(self, t, state, flat_output):
 
@@ -260,7 +265,6 @@ class Xadap_NN_control(MultirotorControlTemplate):
         cmd_motor_thrusts = np.zeros(4,)
         cmd_moment = high_level_control_input['cmd_moment']
         cmd_q = high_level_control_input['cmd_q']
-        cmd_v = high_level_control_input['cmd_v']
 
         control_input = {'cmd_motor_speeds':cmd_motor_speeds,
                          'cmd_motor_thrusts':cmd_motor_thrusts,
@@ -268,7 +272,7 @@ class Xadap_NN_control(MultirotorControlTemplate):
                          'cmd_moment':cmd_moment,
                          'cmd_q':cmd_q,
                          'cmd_w':cmd_w,
-                         'cmd_v':cmd_v}
+                         }
         
         return control_input
 

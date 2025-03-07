@@ -34,6 +34,8 @@ class ModelPredictiveControl(MultirotorControlTemplate):
         # Initilize controls
         self.cmd_motor_forces = np.zeros((4,))
 
+        # Time constant for angular velocity
+        self.K_w_tau = np.linalg.inv(np.diag([20,20,0.8])) 
         # TODO: thread safety if we want to update MPC at runtime
 
     def update_trajectory(self, trajectory):
@@ -63,7 +65,7 @@ class ModelPredictiveControl(MultirotorControlTemplate):
         if self.quad_mpc is None:
             raise ValueError("QuadMPC is not initialized. Call update_trajectory() first.")
         # unpack state used for MPC
-        state = self.unpack_state(state)
+        state_mpc = self.unpack_state(state)
 
         task_index = None
 
@@ -71,7 +73,7 @@ class ModelPredictiveControl(MultirotorControlTemplate):
         index, _ = divmod(t, self.optimization_dt)
         if int(index) == self.sliding_index:
             self.quad_mpc.set_reference(self.sliding_index)
-            w_opt,x_opt,sens_u = self.quad_mpc.run_optimization(initial_state=state, task_index=task_index)
+            w_opt,x_opt,sens_u = self.quad_mpc.run_optimization(initial_state=state_mpc, task_index=task_index)
             self.cmd_motor_forces = w_opt[:4]   # get controls
             cmd_motor_forces = self.cmd_motor_forces
             cmd_motor_speeds = cmd_motor_forces / self.k_eta
@@ -84,10 +86,12 @@ class ModelPredictiveControl(MultirotorControlTemplate):
         cmd_motor_speeds = np.sign(cmd_motor_speeds) * np.sqrt(np.abs(cmd_motor_speeds))
         cmd_thrust = cmd_TM[0]
         cmd_moment = np.array([cmd_TM[1], cmd_TM[2], cmd_TM[3]])
+        cmd_w = self.K_w_tau @ (np.linalg.inv(self.inertia) @ (cmd_moment - np.cross(state['w'],self.inertia@state['w']))) + state['w']
         cmd_q = np.zeros((4,)) # 
         control_input = {'cmd_motor_speeds':cmd_motor_speeds,
                          'cmd_thrust':cmd_thrust,
                          'cmd_moment':cmd_moment,
+                         'cmd_w':cmd_w,
                          'cmd_q':cmd_q}  # This dict is required by simulation env
         
 

@@ -114,3 +114,13 @@ class MultirotorControlTemplate(ABC):
                 cmd_v, desired velocity vector in world frame, m/s (cmd_vel)
         """
         pass
+    
+    def update_trajectory(self, trajectory):
+        """
+        Updates the reference trajectory for the controller.
+        This is particularly important for MPC-based controllers, but available for all controllers.
+        
+        Parameters:
+            trajectory: A trajectory object that implements the update(t) method returning flat outputs
+        """
+        pass
