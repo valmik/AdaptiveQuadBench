@@ -227,8 +227,8 @@ class XAdapLowLevelControl:
 class Xadap_NN_control(MultirotorControlTemplate):
     def __init__(self, vehicle_params):
         super().__init__(vehicle_params)
-        self.high_level_control = SE3Control(vehicle_params)
-        # self.high_level_control = ModelPredictiveControl(vehicle_params)
+        # self.high_level_control = SE3Control(vehicle_params)
+        self.high_level_control = ModelPredictiveControl(vehicle_params)
         self.low_level_control = XAdapLowLevelControl()
         self.low_level_control.set_max_motor_spd(self.rotor_speed_max)
 
