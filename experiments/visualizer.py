@@ -5,7 +5,6 @@ from pathlib import Path
 from experiments.plotting_utils import *
 from utils.parallel_data_collection import compute_cost
 from randomization_config import ExperimentType
-from quad_param.quadrotor import quad_params
 
 class ExperimentVisualizer:
     def __init__(self):
@@ -14,7 +13,7 @@ class ExperimentVisualizer:
         self.plot_dir.mkdir(parents=True, exist_ok=True)
         ModifyPlotForPublication()
 
-    def visualize_trials(self, experiment_type, sim_results, controller_types, controller_param):
+    def visualize_trials(self, experiment_type, sim_results, controller_types, controller_param, vehicle_params):
         """Create plots based on experiment type
         
         Args:
@@ -43,7 +42,7 @@ class ExperimentVisualizer:
             raise ValueError(f"Unsupported experiment type: {experiment_type}. "
                             f"Must be one of {list(plot_functions.keys())}")
         
-        fig = plot_functions[experiment_type](sim_results, controller_types, controller_param,
+        fig = plot_functions[experiment_type](sim_results, controller_types, controller_param, vehicle_params,
                                             controller_palette, disturbance_palette)
         
         plt.tight_layout()
@@ -56,7 +55,7 @@ class ExperimentVisualizer:
         
         return sim_results
 
-    def _plot_wind_experiment(self, sim_results, controller_types, controller_param, controller_palette, disturbance_palette):
+    def _plot_wind_experiment(self, sim_results, controller_types, controller_param, vehicle_params, controller_palette, disturbance_palette):
         """Specific plotting for wind experiments"""
         fig = plt.figure(figsize=(8,4))
         gs = fig.add_gridspec(2,4)
@@ -76,7 +75,7 @@ class ExperimentVisualizer:
         
         return fig
     
-    def _plot_force_experiment(self, sim_results, controller_types, controller_param, controller_palette, disturbance_palette):
+    def _plot_force_experiment(self, sim_results, controller_types, controller_param, vehicle_params, controller_palette, disturbance_palette):
         """Specific plotting for force experiments"""
         fig = plt.figure(figsize=(8,4))
         gs = fig.add_gridspec(2,4)
@@ -96,7 +95,7 @@ class ExperimentVisualizer:
         
         return fig
     
-    def _plot_torque_experiment(self, sim_results, controller_types, controller_param, controller_palette, disturbance_palette):
+    def _plot_torque_experiment(self, sim_results, controller_types, controller_param, vehicle_params, controller_palette, disturbance_palette):
         """Specific plotting for torque experiments"""
         fig = plt.figure(figsize=(8,4))
         gs = fig.add_gridspec(2,4)
@@ -115,7 +114,7 @@ class ExperimentVisualizer:
 
         return fig
 
-    def _plot_rotor_efficiency_experiment(self, sim_results, controller_types, controller_param, controller_palette, disturbance_palette):
+    def _plot_rotor_efficiency_experiment(self, sim_results, controller_types, controller_param, vehicle_params, controller_palette, disturbance_palette):
         num_controllers = len(controller_types)
         fig = plt.figure(figsize=(8,6*num_controllers))
         each_row_num = 3
@@ -136,7 +135,7 @@ class ExperimentVisualizer:
                                     rotor_speed_min, rotor_speed_max, window)
             # plot the rotor efficiency
             ax3 = fig.add_subplot(gs[idx*each_row_num+2, 2:])
-            rotor_eff = np.tile(quad_params['rotor_efficiency'], (result['time'].shape[0], 1))
+            rotor_eff = np.tile(vehicle_params['rotor_efficiency'], (result['time'].shape[0], 1))
             ax3.plot(result['time'], rotor_eff[:,0], label='Rotor 1')
             ax3.plot(result['time'], rotor_eff[:,1], label='Rotor 2')
             ax3.plot(result['time'], rotor_eff[:,2], label='Rotor 3')
@@ -148,7 +147,7 @@ class ExperimentVisualizer:
             
         return fig
     
-    def _plot_uncertainty_experiment(self, sim_results, controller_types, controller_param, controller_palette, disturbance_palette):
+    def _plot_uncertainty_experiment(self, sim_results, controller_types, controller_param, vehicle_params, controller_palette, disturbance_palette):
         """Specific plotting for uncertainty experiments"""
         """
         Create a radar chart comparing ground truth and reference model parameters
@@ -164,14 +163,14 @@ class ExperimentVisualizer:
         plot_3d_trajectory(ax1, sim_results, controller_types, controller_palette)
         ax1.set_title('3D Trajectory')
         ax2 = fig.add_subplot(gs[0:, 2:], projection='polar')
-        plot_model_uncertainty(ax2, controller_param)
+        plot_model_uncertainty(ax2, controller_param, vehicle_params)
 
         return fig
     
     
     
 
-    def _plot_payload_experiment(self, sim_results, controller_types, controller_param, controller_palette, disturbance_palette):
+    def _plot_payload_experiment(self, sim_results, controller_types, controller_param, vehicle_params, controller_palette, disturbance_palette):
         """Specific plotting for payload experiments"""
         fig = plt.figure(figsize=(6,6))
         gs = fig.add_gridspec(4,4)
@@ -189,7 +188,7 @@ class ExperimentVisualizer:
         force = sim_results[0]['state']['ext_force']
         torque = sim_results[0]['state']['ext_torque']
         force_mag = np.linalg.norm(force, axis=1)
-        payload_mass_ratio = force_mag / (quad_params['mass'] * 9.81)
+        payload_mass_ratio = force_mag / (vehicle_params['mass'] * 9.81)
         ax3 = fig.add_subplot(gs[3, :])
         ax3.plot(sim_results[0]['time'], payload_mass_ratio)
         ax3.set_xlabel('Time [s]')

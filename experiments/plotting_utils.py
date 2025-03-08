@@ -186,7 +186,7 @@ def plot_drone(ax):
     ax.set_ylim(-limit, limit)
 
 
-def plot_model_uncertainty(ax,controller_param):
+def plot_model_uncertainty(ax,controller_param, vehicle_params):
         """Specific plotting for model uncertainty experiments"""
         params_to_plot = [
             'mass', 'Ixx', 'Iyy', 'Izz', 'arm_length',
@@ -202,7 +202,7 @@ def plot_model_uncertainty(ax,controller_param):
         values_ref = []
         
         for param in params_to_plot:
-            gt_val = quad_params[param]
+            gt_val = vehicle_params[param]
             ref_val = controller_param[param]
             # Normalize relative to reference value
             values_gt.append(gt_val / ref_val)

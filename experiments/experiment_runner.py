@@ -78,7 +78,8 @@ class ExperimentRunner:
             'ext_force': ext_force,
             'ext_torque': ext_torque,
             'vehicles': vehicles,
-            'controller_params': controller_params_list
+            'controller_params': controller_params_list,
+            'vehicle_params': vehicle_params_list
         }
 
     def _run_visualization(self):
@@ -137,7 +138,8 @@ class ExperimentRunner:
             experiment_type=self.config.experiment_type,
             sim_results=sim_results,
             controller_types=self.config.controller_types,
-            controller_param=components['controller_params'][0]
+            controller_param=components['controller_params'][0],
+            vehicle_params=components['vehicle_params'][0]
         )
 
     def _run_when2fail(self):
