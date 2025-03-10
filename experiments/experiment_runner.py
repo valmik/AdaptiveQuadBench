@@ -208,7 +208,7 @@ class ExperimentRunner:
                     varied_components['ext_torque'],
                     self.config.num_trials,
                     use_parallel,
-                    False,
+                    self.config.save_trials,
                     self.config.experiment_type,
                     output_file=temp_csv
                 )

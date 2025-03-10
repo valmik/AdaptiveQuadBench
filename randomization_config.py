@@ -6,7 +6,7 @@ from rotorpy.trajectories.random_motion_prim_traj import RapidTrajectory
 from rotorpy.trajectories.hover_traj import HoverTraj
 from rotorpy.trajectories.circular_traj import CircularTraj
 from rotorpy.wind.dryden_winds import DrydenGust
-from quad_param.mini_quad import mini_quad_params
+from copy import deepcopy
 # TODO add citation to each controller
 # TODO: fix when2fail plot (select 2 conditions)
 # ?????? why???? PAPER version also do not work????
@@ -269,100 +269,8 @@ class RandomizationConfig:
         """Generate vehicle parameters with optional rotor efficiency variations"""
         vehicle_params_list = []
         for _ in range(self.num_trials):
-            params = base_params.copy()
-            if self.controller_uncertainty_enabled:
-                if self.uncertainty_type == UncertantyType.UNIFORM:
-                    original_arm_length = base_params['arm_length']
-                    for key, value in params.items():
-                        if key in ['mass', 'Ixx', 'Iyy', 'Izz', 'arm_length', 'c_Dx', 'c_Dy', 'c_Dz', 
-                                'rotor_speed_min', 'rotor_speed_max', 'k_eta', 'k_m', 'k_d', 'k_z',
-                                'k_flap', 'cd1_x', 'cd1_y', 'cd1_z', 'cdz_h']:
-                            params[key] *= (1 + np.random.uniform(-self.uniform_model_uncertainty, self.uniform_model_uncertainty))
-
-                    params['rotor_pos'] = {rotor_key: rotor_value * params['arm_length'] / base_params['arm_length'] 
-                                         for rotor_key, rotor_value in params['rotor_pos'].items()}
-                else: # Scaled Uncertainty
-                    # # ! paper version rand
-                    # # c = max(-0.5, np.random.uniform(0.5 - self.scaled_model_uncertainty, 0.5 + self.scaled_model_uncertainty))
-                    # c = np.random.uniform(0,1)
-                    # params['arm_length'] = c* (base_params['arm_length'] - mini_quad_params['arm_length']) + mini_quad_params['arm_length']
-                    # kappa_large = base_params['k_m'] / base_params['k_eta']
-                    # kappa_mini = mini_quad_params['k_m'] / mini_quad_params['k_eta']
-                    # kappa = c * (kappa_large - kappa_mini) + kappa_mini
-                    # params['k_d'] = c * (base_params['k_d'] - mini_quad_params['k_d']) + mini_quad_params['k_d']
-                    # params['k_z'] = c * (base_params['k_z'] - mini_quad_params['k_z']) + mini_quad_params['k_z']
-                    # params['k_flap'] = c * (base_params['k_flap'] - mini_quad_params['k_flap']) + mini_quad_params['k_flap']
-                    # params['rotor_speed_max'] = c * (base_params['rotor_speed_max'] - mini_quad_params['rotor_speed_max']) + mini_quad_params['rotor_speed_max']
-
-                    # l_to_m = (params['arm_length']**3 - mini_quad_params['arm_length']**3) / (base_params['arm_length']**3 - mini_quad_params['arm_length']**3)
-                    # I_to_m = (params['arm_length']**5 - mini_quad_params['arm_length']**5) / (base_params['arm_length']**5 - mini_quad_params['arm_length']**5)
-                    # cd_to_m = (params['arm_length']**2 - mini_quad_params['arm_length']**2) / (base_params['arm_length']**2 - mini_quad_params['arm_length']**2)
-                    
-                    # params['k_eta'] = np.exp(c * (np.log(base_params['k_eta']) - np.log(mini_quad_params['k_eta'])) + np.log(mini_quad_params['k_eta']))
-                    # params['mass'] = c * (base_params['mass'] - mini_quad_params['mass']) + mini_quad_params['mass']
-                    # params['Ixx'] = c * (base_params['Ixx'] - mini_quad_params['Ixx']) + mini_quad_params['Ixx']
-                    # params['Iyy'] = c * (base_params['Iyy'] - mini_quad_params['Iyy']) + mini_quad_params['Iyy']
-                    # params['Izz'] = c * (base_params['Izz'] - mini_quad_params['Izz']) + mini_quad_params['Izz']
-                    # params['cd1x'] = c * (base_params['cd1x'] - mini_quad_params['cd1x']) + mini_quad_params['cd1x']
-                    # params['cd1y'] = c * (base_params['cd1y'] - mini_quad_params['cd1y']) + mini_quad_params['cd1y']
-                    # params['cd1z'] = c * (base_params['cd1z'] - mini_quad_params['cd1z']) + mini_quad_params['cd1z']
-                    # params['cdz_h'] = c * (base_params['cdz_h'] - mini_quad_params['cdz_h']) + mini_quad_params['cdz_h']
-                    # params['c_Dx'] = c * (base_params['c_Dx'] - mini_quad_params['c_Dx']) + mini_quad_params['c_Dx']
-                    # params['c_Dy'] = c * (base_params['c_Dy'] - mini_quad_params['c_Dy']) + mini_quad_params['c_Dy']
-                    # params['c_Dz'] = c * (base_params['c_Dz'] - mini_quad_params['c_Dz']) + mini_quad_params['c_Dz']
-                    # params['k_m'] = kappa * params['k_eta']
-
-                    # scaling constant 
-                    # c = max(-1+0.001,np.random.uniform(-self.scaled_model_uncertainty, self.scaled_model_uncertainty))
-                    c = np.random.uniform(-0.5,0.5)
-                    # Linear scaling componnets
-                    params['arm_length'] = (1 + c) * base_params['arm_length']
-                    kappa = (1+c) * base_params['k_m'] / base_params['k_eta']
-                    params['k_d'] = (1+c) * base_params['k_d']
-                    params['k_z'] = (1+c) * base_params['k_z']
-                    params['k_flap'] = (1+c) * base_params['k_flap']
-                    params['rotor_speed_max'] = (1+c) * base_params['rotor_speed_max']
-                    
-                    # Calculate scaling factors
-                    l_to_m = (1 + c)**3  # mass scales with L^3
-                    I_to_m = (1 + c)**5  # inertia scales with L^5 
-                    cd_to_m = (1 + c)**2  # drag coefficients scale with L^2
-                    
-                    # k_eta calculation using exponential formula
-                    # fitted with (crazyfile, humming bird, Agilicious, and 2 lab custom quadrotors)
-                    params['k_eta'] = min(1, 5.385e-8 * np.exp(4.73*c))
-                    # params['k_eta'] = min(1, 5.385e-8 * np.exp(4.73*c))
-                    # params['k_eta'] = min(1, 4.32e-8 * np.exp(5.1753*c))
-                    # Apply scaling to other parameters
-                    params['mass'] = base_params['mass'] * l_to_m
-                    params['Ixx'] = base_params['Ixx'] * I_to_m
-                    params['Iyy'] = base_params['Iyy'] * I_to_m
-                    params['Izz'] = base_params['Izz'] * I_to_m
-                    params['cd1x'] = base_params['cd1x'] * cd_to_m
-                    params['cd1y'] = base_params['cd1y'] * cd_to_m
-                    params['cd1z'] = base_params['cd1z'] * cd_to_m
-                    params['cdz_h'] = base_params['cdz_h'] * cd_to_m
-                    params['c_Dx'] = base_params['c_Dx'] * cd_to_m
-                    params['c_Dy'] = base_params['c_Dy'] * cd_to_m
-                    params['c_Dz'] = base_params['c_Dz'] * cd_to_m
-                    params['k_m'] = kappa * params['k_eta']
-
-                    # Apply uniform ±20% noise to all scaled parameters
-                    noise_params = [
-                        'arm_length', 'k_d', 'k_z', 'k_flap', 'rotor_speed_max',
-                        'mass', 'Ixx', 'Iyy', 'Izz',
-                        'cd1x', 'cd1y', 'cd1z', 'cdz_h',
-                        'c_Dx', 'c_Dy', 'c_Dz',
-                        'k_eta', 'k_m'
-                    ]
-                    
-                    for key in noise_params:
-                        noise = np.random.uniform(-self.scaled_model_uncertainty_noise, self.scaled_model_uncertainty_noise)  # ±20% uniform noise
-                        params[key] *= (1 + noise)
-
-                    # Update rotor positions
-                    params['rotor_pos'] = {rotor_key: rotor_value * params['arm_length'] / base_params['arm_length'] 
-                                         for rotor_key, rotor_value in params['rotor_pos'].items()}
+            params = deepcopy(base_params)
+            
             # Apply rotor efficiency to vehicle parameters
             if self.rotor_efficiency_enabled:
                 params['rotor_efficiency'] += np.random.uniform(*self.rotor_efficiency_range, size=4)
@@ -415,9 +323,70 @@ class RandomizationConfig:
         """Generate controller parameters with uncertainty"""
         controller_params_list = []
         for _ in range(self.num_trials):
-            params = base_params.copy()
-            
+            params = deepcopy(base_params)
+            if self.controller_uncertainty_enabled:
+                if self.uncertainty_type == UncertantyType.UNIFORM:
+                    original_arm_length = base_params['arm_length']
+                    for key, value in params.items():
+                        if key in ['mass', 'Ixx', 'Iyy', 'Izz', 'arm_length', 'c_Dx', 'c_Dy', 'c_Dz', 
+                                'rotor_speed_min', 'rotor_speed_max', 'k_eta', 'k_m', 'k_d', 'k_z',
+                                'k_flap', 'cd1_x', 'cd1_y', 'cd1_z', 'cdz_h']:
+                            params[key] *= (1 + np.random.uniform(-self.uniform_model_uncertainty, self.uniform_model_uncertainty))
+
+                    params['rotor_pos'] = {rotor_key: rotor_value * params['arm_length'] / base_params['arm_length'] 
+                                         for rotor_key, rotor_value in params['rotor_pos'].items()}
+                else: # Scaled Uncertainty
+                    # scaling constant 
+                    c = max(-1+0.001,np.random.uniform(-self.scaled_model_uncertainty, self.scaled_model_uncertainty))
+                    # Linear scaling componnets
+                    params['arm_length'] = (1 + c) * base_params['arm_length']
+                    kappa = (1+c) * base_params['k_m'] / base_params['k_eta']
+                    params['k_d'] = (1+c) * base_params['k_d']
+                    params['k_z'] = (1+c) * base_params['k_z']
+                    params['k_flap'] = (1+c) * base_params['k_flap']
+
+                    # We are not scaling the rotor speed max since it is for clamping 
+                    # params['rotor_speed_max'] = (1+c) * base_params['rotor_speed_max']
                     
+                    # Calculate scaling factors
+                    l_to_m = (1 + c)**3  # mass scales with L^3
+                    I_to_m = (1 + c)**5  # inertia scales with L^5 
+                    cd_to_m = (1 + c)**2  # drag coefficients scale with L^2
+                    
+                    # k_eta calculation using exponential formula
+                    # fitted with (crazyfile, humming bird, Agilicious, and 2 lab custom quadrotors)
+                    params['k_eta'] = min(1, 5.385e-8 * np.exp(4.73*c))
+
+                    # Apply scaling to other parameters
+                    params['mass'] = base_params['mass'] * l_to_m
+                    params['Ixx'] = base_params['Ixx'] * I_to_m
+                    params['Iyy'] = base_params['Iyy'] * I_to_m
+                    params['Izz'] = base_params['Izz'] * I_to_m
+                    params['cd1x'] = base_params['cd1x'] * cd_to_m
+                    params['cd1y'] = base_params['cd1y'] * cd_to_m
+                    params['cd1z'] = base_params['cd1z'] * cd_to_m
+                    params['cdz_h'] = base_params['cdz_h'] * cd_to_m
+                    params['c_Dx'] = base_params['c_Dx'] * cd_to_m
+                    params['c_Dy'] = base_params['c_Dy'] * cd_to_m
+                    params['c_Dz'] = base_params['c_Dz'] * cd_to_m
+                    params['k_m'] = kappa * params['k_eta']
+
+                    # Apply uniform ±20% noise to all scaled parameters
+                    noise_params = [
+                        'arm_length', 'k_d', 'k_z', 'k_flap', 'rotor_speed_max',
+                        'mass', 'Ixx', 'Iyy', 'Izz',
+                        'cd1x', 'cd1y', 'cd1z', 'cdz_h',
+                        'c_Dx', 'c_Dy', 'c_Dz',
+                        'k_eta', 'k_m'
+                    ]
+                    
+                    for key in noise_params:
+                        noise = np.random.uniform(-self.scaled_model_uncertainty_noise, self.scaled_model_uncertainty_noise)  # ±20% uniform noise
+                        params[key] *= (1 + noise)
+
+                    # Update rotor positions
+                    params['rotor_pos'] = {rotor_key: rotor_value * params['arm_length'] / base_params['arm_length'] 
+                                         for rotor_key, rotor_value in params['rotor_pos'].items()}
 
             controller_params_list.append(params)
         

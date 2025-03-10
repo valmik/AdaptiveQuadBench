@@ -107,7 +107,6 @@ class NeuralNetworkModel:
         
         # Get latent representation from adaptation module
         latent = self.adap_session.run(None, {self.adap_obs_name: norm_history})
-        
         # Combine current observation with latent representation
         combined_input = np.concatenate((norm_cur_obs.reshape(1,-1), 
                                        np.asarray(latent).reshape((1,-1))), axis=1).astype(np.float32)
@@ -133,10 +132,10 @@ class Xadap_NN_control(MultirotorControlTemplate):
         self.high_level_control_freq = 50.0
         self.next_t_high_level_control = 0.0
 
-        # Initialize geometric controller parameters
+        # Initialize high-level geometric controller parameters, identical from the paper
         self._init_geometric_controller_params()
-        # Initialize high-level controller
-        self.high_level_control = SE3Control(vehicle_params)
+        # Initialize high-level controller from our control library
+        self.high_level_control = ModelPredictiveControl(vehicle_params)
         
         # Initialize state histories
         self._init_state_histories()
@@ -161,7 +160,6 @@ class Xadap_NN_control(MultirotorControlTemplate):
         self.att_control_integral_gain = 0.0
 
         # Geo gains 
-        # TODO: change 
         self.kp_pos = np.array([5,5,30])
         self.kd_pos = np.array([4.0, 4.0, 9])
         self.kp_att = 544
@@ -192,12 +190,12 @@ class Xadap_NN_control(MultirotorControlTemplate):
         """Main control loop"""
         # Run high-level geometric controller at specified frequency
         if t > self.next_t_high_level_control:
-            # ! Default high-level control
+            # # High-level control from our control library
             # high_level_control_input = self.high_level_control.update(t, state, flat_output)
             # self.cmd_mass_norm_thrust = high_level_control_input['cmd_thrust'] / self.mass
-            # 
-            # ! same high-level control from paper
-            high_level_control_input = self.high_level_control_run(
+
+            # High-level control from paper
+            high_level_control_input = self.embed_highlevel_run(
                 state,flat_output
             )
             self.cmd_mass_norm_thrust = high_level_control_input['cmd_thrust']
@@ -232,7 +230,6 @@ class Xadap_NN_control(MultirotorControlTemplate):
         self.act_history.popleft()
         self.act_history.append(raw_act)
         self.last_act = raw_act
-        
         # Convert network output to motor commands
         spd_NN = norm_act.squeeze() * self.rotor_speed_max
         cmd_motor_speeds = self._reorder_motor_speeds(spd_NN)
@@ -280,7 +277,7 @@ class Xadap_NN_control(MultirotorControlTemplate):
         """Update reference trajectory"""
         self.high_level_control.update_trajectory(trajectory)
 
-    def high_level_control_run(self, state, flat_output):
+    def embed_highlevel_run(self, state, flat_output):
         """
         High-level tilt-prioritized geometric controller that computes desired thrust and attitude.
         
@@ -330,7 +327,7 @@ class Xadap_NN_control(MultirotorControlTemplate):
         cmd_thrust_dir = cmd_proper_acc / np.linalg.norm(cmd_proper_acc)
         
         # Compute total thrust
-        out_cmd_thrust = norm_cmd_proper_acc * np.dot(cur_att @ self.e3, cmd_thrust_dir)
+        out_cmd_thrust = np.linalg.norm(cmd_proper_acc) * np.dot(cur_att @ self.e3, cmd_thrust_dir)
         
         if out_cmd_thrust < self._min_proper_acc:
             out_cmd_thrust = self._min_proper_acc
