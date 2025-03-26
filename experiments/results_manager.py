@@ -7,47 +7,44 @@ import csv
 import time
 from utils.parallel_data_collection import generate_data
 from rotorpy.world import World
-
+from config.simulation_config import SimulationConfig
 class ResultsManager:
     def __init__(self):
         self.data_dir = Path(__file__).parent.parent / 'data'
         self.data_dir.mkdir(exist_ok=True)
         
-    def generate_summary(self, controller_type, controllers, vehicles, wind_profiles, 
-                        trajectories, ext_force, ext_torque, num_simulations=100, 
-                        parallel_bool=True, save_trials=False, experiment_type='no', 
-                        output_file=None):
-        world_size = 10
-        controller_name = str(controller_type)
+    def generate_summary(self, config: SimulationConfig):
+        """
+        Generate a summary of simulation results using a configuration object.
         
-        output_csv_file = output_file if output_file else self.data_dir / f'summary_{controller_name}_{experiment_type}.csv'
+        Args:
+            config: SimulationConfig object containing all simulation parameters
+        """
+        controller_name = config.controller_type
+        experiment_type = config.experiment_type
+        
+        output_csv_file = config.output_file if config.output_file else self.data_dir / f'summary_{controller_name}_{experiment_type}.csv'
         
         if output_csv_file.exists():
             output_csv_file.unlink()
             
         savepath = None
-        if save_trials:
+        if config.save_individual_trials:
             savepath = self.data_dir / f'trial_data_{controller_name}_{experiment_type}'
             self._handle_trial_directory(savepath)
+            config.save_trial_path = savepath
 
         # Create headers
         with open(output_csv_file, 'w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(['traj_number', 'pos_tracking_error', 'heading_error'])
 
-        # Create world
-        world = World.empty([-world_size/2, world_size/2, -world_size/2, world_size/2, -world_size/2, world_size/2])
-
         # Generate data
         start_time = time.time()
-        generate_data(output_csv_file, world, vehicles, controllers, wind_profiles,
-                     trajectories, num_simulations, ext_force, ext_torque,
-                     parallel=parallel_bool,
-                     save_individual_trials=save_trials,
-                     save_trial_path=savepath)
+        generate_data(output_csv_file, config)
         end_time = time.time()
         
-        print(f"Time elapsed: {end_time-start_time:.2f} seconds, parallel: {parallel_bool}")
+        print(f"Time elapsed: {end_time-start_time:.2f} seconds, parallel: {config.parallel}")
         
         self._process_and_save_results(output_csv_file, controller_name, experiment_type)
 

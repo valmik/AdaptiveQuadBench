@@ -17,6 +17,7 @@ from utils.delay_analysis import compute_delay_margin, plot_delay_margin_results
 from rotorpy.trajectories.circular_traj import CircularTraj
 from dataclasses import dataclass, field
 from typing import Any, Dict
+from config.simulation_config import SimulationConfig
 
 
 
@@ -58,19 +59,29 @@ class ExperimentRunner:
             ]
             
             use_parallel = (not self.config.use_serial) and controller_type != 'xadap'
-            self.results_manager.generate_summary(
-                controller_type,
-                controllers,
-                components['vehicles'],
-                components['wind_profiles'],
-                components['trajectories'],
-                components['ext_force'],
-                components['ext_torque'],
-                self.config.num_trials,
-                use_parallel,
-                self.config.save_trials,
-                self.config.experiment_type
+            
+            # Create a world
+            world_size = 10
+            world = World.empty([-world_size/2, world_size/2, -world_size/2, world_size/2, -world_size/2, world_size/2])
+            
+            # Create simulation config
+            sim_config = SimulationConfig(
+                world=world,
+                vehicles=components['vehicles'],
+                controllers=controllers,
+                wind_profiles=components['wind_profiles'],
+                trajectories=components['trajectories'],
+                num_simulations=self.config.num_trials,
+                ext_force=components['ext_force'],
+                ext_torque=components['ext_torque'],
+                parallel=use_parallel,
+                save_individual_trials=self.config.save_trials,
+                experiment_type=self.config.experiment_type,
+                controller_type=controller_type
             )
+            
+            # Generate summary with the config object
+            self.results_manager.generate_summary(sim_config)
 
     def _generate_components(self, config):
         trajectories = config.create_trajectories()
@@ -205,21 +216,29 @@ class ExperimentRunner:
                 # Create temporary CSV for this run
                 temp_csv = self.results_manager.data_dir / f'temp_{controller_type}_{intensity:.1f}.csv'
                 
+                # Create a world
+                world_size = 10
+                world = World.empty([-world_size/2, world_size/2, -world_size/2, world_size/2, -world_size/2, world_size/2])
                 use_parallel = (not self.config.use_serial) and controller_type != 'xadap'
-                self.results_manager.generate_summary(
-                    controller_type,
-                    controllers,
-                    vehicles,
-                    varied_components['wind_profiles'],
-                    base_components['trajectories'],  # Use constant trajectories
-                    varied_components['ext_force'],
-                    varied_components['ext_torque'],
-                    self.config.num_trials,
-                    use_parallel,
-                    self.config.save_trials,
-                    self.config.experiment_type,
+                # Create simulation config
+                sim_config = SimulationConfig(
+                    world=world,
+                    vehicles=vehicles,
+                    controllers=controllers,
+                    wind_profiles=varied_components['wind_profiles'],
+                    trajectories=base_components['trajectories'],
+                    num_simulations=self.config.num_trials,
+                    ext_force=varied_components['ext_force'],
+                    ext_torque=varied_components['ext_torque'],
+                    parallel=use_parallel,
+                    save_individual_trials=self.config.save_trials,
+                    experiment_type=self.config.experiment_type,
+                    controller_type=controller_type,
                     output_file=temp_csv
                 )
+                
+                # Generate summary with the config object
+                self.results_manager.generate_summary(sim_config)
                 
                 # Read results
                 df = pd.read_csv(temp_csv)

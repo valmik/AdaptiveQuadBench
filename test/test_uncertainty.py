@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from randomization_config import RandomizationConfig, ExperimentType, TrajectoryType, UncertantyType
+from config.randomization_config import RandomizationConfig, ExperimentType, TrajectoryType, UncertantyType
 
 def get_test_quad_params():
     """Returns a simple set of quadrotor parameters for testing"""

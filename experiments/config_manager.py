@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 import argparse
 from pathlib import Path
-from randomization_config import ExperimentType
+from config.randomization_config import ExperimentType
 
 @dataclass
 class ExperimentConfig:
@@ -17,7 +17,7 @@ class ExperimentConfig:
     max_intensity: float
     intensity_step: float
     trajectory_type: str
-    
+    delay_margin: bool = False
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> 'ExperimentConfig':
         controller_types = args.controller if 'all' not in args.controller else [
@@ -34,7 +34,8 @@ class ExperimentConfig:
             when2fail=args.when2fail,
             max_intensity=args.max_intensity,
             intensity_step=args.intensity_step,
-            trajectory_type=args.trajectory
+            trajectory_type=args.trajectory,
+            delay_margin=args.delay_margin
         )
 
 def parse_experiment_args() -> ExperimentConfig:
@@ -62,4 +63,6 @@ def parse_experiment_args() -> ExperimentConfig:
     parser.add_argument('--trajectory', type=str, default='random',
                        choices=['random', 'hover', 'circle'],
                        help='trajectory type to use')
+    parser.add_argument('--delay_margin', action='store_true',
+                       help='calculate delay margin for the given trajectory')
     return ExperimentConfig.from_args(parser.parse_args())

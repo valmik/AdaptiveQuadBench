@@ -1,6 +1,7 @@
 from rotorpy.trajectories.minsnap import MinSnap
 from rotorpy.environments import Environment
 from rotorpy.utils.occupancy_map import OccupancyMap
+from config.simulation_config import SimulationConfig
 
 import numpy as np                  # For array creation/manipulation
 import matplotlib.pyplot as plt     # For plotting, although the simulator has a built in plotter
@@ -57,12 +58,10 @@ def write_to_csv(output_file, row):
         writer.writerow(row)
     return None
 
-def single_traj_instance(world, vehicles, controllers, wind_profiles, trajectories,
-                         ext_force=None, ext_torque=None,
-                         seed=None, save_trial=False, save_trial_path=None):
+def single_traj_instance(config: SimulationConfig, seed=None):
     """
-    Generate a single instance of the simulator with a trajectory. 
-    Now accepts a list of vehicles and uses the corresponding one for each trial.
+    Generate a single instance of the simulator with a trajectory.
+    Now accepts a configuration object instead of many parameters.
     """
     if seed is not None:
         np.random.seed(seed)
@@ -72,14 +71,18 @@ def single_traj_instance(world, vehicles, controllers, wind_profiles, trajectori
         traj_id = np.random.randint(0, 2**16)
 
     # Get the corresponding vehicle, controller and wind profile for this trial
-    vehicle = vehicles[traj_id % len(vehicles)]
-    controller = controllers[traj_id % len(controllers)]
-    wind_profile = wind_profiles[traj_id % len(wind_profiles)]
-    traj = trajectories[traj_id % len(trajectories)]
-    if ext_force is not None:
-        ext_force = ext_force[traj_id % len(ext_force)]
-    if ext_torque is not None:
-        ext_torque = ext_torque[traj_id % len(ext_torque)]
+    vehicle = config.vehicles[traj_id % len(config.vehicles)]
+    controller = config.controllers[traj_id % len(config.controllers)]
+    wind_profile = config.wind_profiles[traj_id % len(config.wind_profiles)]
+    traj = config.trajectories[traj_id % len(config.trajectories)]
+    
+    ext_force = None
+    if config.ext_force is not None:
+        ext_force = config.ext_force[traj_id % len(config.ext_force)]
+        
+    ext_torque = None
+    if config.ext_torque is not None:
+        ext_torque = config.ext_torque[traj_id % len(config.ext_torque)]
 
     controller.update_trajectory(traj)
 
@@ -111,11 +114,11 @@ def single_traj_instance(world, vehicles, controllers, wind_profiles, trajectori
                               animate_wind=False, 
                               verbose=False)
     
-    if save_trial:
-        savepath = save_trial_path
+    if config.save_individual_trials and config.save_trial_path:
+        savepath = config.save_trial_path
         if not os.path.exists(savepath):
             os.makedirs(savepath)
-        sim_instance.save_to_csv(os.path.join(savepath, 'trial_{}.csv'.format(traj_id)))
+        sim_instance.save_to_csv(os.path.join(savepath, f'trial_{traj_id}.csv'))
     
     # Compute the cost of the trajectory from result
     trajectory_cost, heading_error = compute_cost(sim_result)
@@ -124,29 +127,24 @@ def single_traj_instance(world, vehicles, controllers, wind_profiles, trajectori
 
     return summary_output
 
-def generate_data(output_csv_file, world, vehicles, controllers, wind_profiles, trajectories,
-                  num_simulations, ext_force=None, ext_torque=None, parallel=True,
-                  save_individual_trials=False, save_trial_path=None):
+def generate_data(output_csv_file, config: SimulationConfig):
     """
-    Generates data. Now accepts a list of vehicles.
+    Generates data using a configuration object instead of many parameters.
     """
-    if not parallel:
-        for i in tqdm(range(num_simulations), desc="Running simulations (sequentially)..."):
-            result = single_traj_instance(world, vehicles, controllers, wind_profiles, trajectories,
-                                        ext_force=ext_force, ext_torque=ext_torque,
-                                        seed=i, save_trial=save_individual_trials, 
-                                        save_trial_path=save_trial_path)
+    if not config.parallel:
+        for i in tqdm(range(config.num_simulations), desc="Running simulations (sequentially)..."):
+            result = single_traj_instance(config, seed=i)
             write_to_csv(output_csv_file, result)
     else:
         # Use multiprocessing to run multiple simulations in parallel.
         num_cores = min(multiprocessing.cpu_count(), 20)
 
-        print("Running {} simulations in parallel with up to {} cores.".format(num_simulations, num_cores))
+        print(f"Running {config.num_simulations} simulations in parallel with up to {num_cores} cores.")
               
         pool = multiprocessing.Pool(num_cores)
 
         # Use numpy random to generate seeds for each simulation.
-        seeds = np.random.choice(np.arange(num_simulations), size=num_simulations, replace=False)
+        seeds = np.random.choice(np.arange(config.num_simulations), size=config.num_simulations, replace=False)
 
         manager = multiprocessing.Manager()
         
@@ -157,21 +155,20 @@ def generate_data(output_csv_file, world, vehicles, controllers, wind_profiles, 
                 write_to_csv(output_file=output_csv_file, row=result)
 
         code_rate = 1.33  # simulations per second, emperically determined from our machine, but will differ for yours.
-        expected_duration_seconds = num_simulations/code_rate  
+        expected_duration_seconds = config.num_simulations/code_rate  
         
         current_time = datetime.datetime.now()
         end_time = current_time + datetime.timedelta(seconds=expected_duration_seconds)
 
         print(f"Start time: {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        print("Expected duration: %3.2f seconds (%3.2f minutes, or %3.2f hours)" % (expected_duration_seconds, expected_duration_seconds/60, expected_duration_seconds/3600))
+        print(f"Expected duration: {expected_duration_seconds:.2f} seconds ({expected_duration_seconds/60:.2f} minutes, or {expected_duration_seconds/3600:.2f} hours)")
         print(f"Program *may* end around: {end_time.strftime('%Y-%m-%d %H:%M:%S')}, depending on your machine specs, number of waypoints, distance between waypoints, etc.")
 
         print("Running simulations (in parallel)...")
-        for i in range(num_simulations):
+        for i in range(config.num_simulations):
+            # Create a copy of the config for this specific simulation
             pool.apply_async(single_traj_instance, 
-                           args=(world, vehicles, controllers, wind_profiles, trajectories,
-                                 ext_force, ext_torque,
-                                 i, save_individual_trials, save_trial_path),
+                           args=(config, i),
                            callback=update_results)
             
         pool.close()

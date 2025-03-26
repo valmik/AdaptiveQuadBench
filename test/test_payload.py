@@ -1,7 +1,7 @@
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from randomization_config import RandomizationConfig, ExperimentType
+from config.randomization_config import RandomizationConfig, ExperimentType
 from quad_param.quadrotor import quad_params
 import numpy as np
 def test_payload():

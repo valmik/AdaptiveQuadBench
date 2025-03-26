@@ -2,9 +2,22 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 from pathlib import Path
+from dataclasses import dataclass
+from typing import List, Dict, Any, Optional
 from experiments.plotting_utils import *
 from utils.parallel_data_collection import compute_cost
-from randomization_config import ExperimentType
+from config.randomization_config import ExperimentType
+
+@dataclass
+class VisualizationConfig:
+    """Configuration for experiment visualization"""
+    sim_results: List[Dict[str, Any]]
+    controller_types: List[str]
+    controller_palette: Optional[Any] = None
+    disturbance_palette: Optional[Any] = None
+    controller_param: Optional[Dict] = None
+    vehicle_params: Optional[Dict] = None
+    experiment_type: Optional[str] = None
 
 class ExperimentVisualizer:
     def __init__(self):
@@ -21,13 +34,21 @@ class ExperimentVisualizer:
             sim_results (list): List of simulation results
             controller_types (list): List of controller names
             controller_param (list): List of controller parameters
+            vehicle_params (dict): Vehicle parameters
             
         Raises:
             ValueError: If experiment_type is not supported
         """
-
-        controller_palette = sns.color_palette("husl", len(controller_types))
-        disturbance_palette = sns.color_palette("Set1", 3)
+        # Create visualization config
+        config = VisualizationConfig(
+            sim_results=sim_results,
+            controller_types=controller_types,
+            controller_param=controller_param,
+            vehicle_params=vehicle_params,
+            controller_palette=sns.color_palette("husl", len(controller_types)),
+            disturbance_palette=sns.color_palette("Set1", 3),
+            experiment_type=experiment_type
+        )
         
         plot_functions = {
             'wind': self._plot_wind_experiment,
@@ -42,100 +63,96 @@ class ExperimentVisualizer:
             raise ValueError(f"Unsupported experiment type: {experiment_type}. "
                             f"Must be one of {list(plot_functions.keys())}")
         
-        fig = plot_functions[experiment_type](sim_results, controller_types, controller_param, vehicle_params,
-                                            controller_palette, disturbance_palette)
+        fig = plot_functions[experiment_type](config)
         
         plt.tight_layout()
         plt.savefig(self.plot_dir / f'vis_{experiment_type}_{"_".join(controller_types)}.png', 
                     dpi=300, bbox_inches='tight')
         plt.show()
 
-
         self._print_metrics(sim_results, controller_types)
         
         return sim_results
 
-    def _plot_wind_experiment(self, sim_results, controller_types, controller_param, vehicle_params, controller_palette, disturbance_palette):
+    def _plot_wind_experiment(self, config: VisualizationConfig):
         """Specific plotting for wind experiments"""
         fig = plt.figure(figsize=(8,4))
         gs = fig.add_gridspec(2,4)
         
         # 3D trajectory and wind vector plot
         ax1 = fig.add_subplot(gs[0:, 0:2], projection='3d')
-        plot_3d_trajectory(ax1, sim_results, controller_types, controller_palette)
+        plot_3d_trajectory(ax1, config.sim_results, config.controller_types, config.controller_palette)
         
         # Wind components
         ax2 = fig.add_subplot(gs[1, 2:])
-        plot_disturbance(ax2, sim_results[0], 'wind', disturbance_palette)
+        plot_disturbance(ax2, config.sim_results[0], 'wind', config.disturbance_palette)
         ax2.set_ylabel('Wind [m/s]')
         # Position tracking error
         ax3 = fig.add_subplot(gs[0, 2:])
-        plot_position_error(ax3, sim_results, controller_types, controller_palette)
-        
+        plot_position_error(ax3, config.sim_results, config.controller_types, config.controller_palette)
         
         return fig
     
-    def _plot_force_experiment(self, sim_results, controller_types, controller_param, vehicle_params, controller_palette, disturbance_palette):
+    def _plot_force_experiment(self, config: VisualizationConfig):
         """Specific plotting for force experiments"""
         fig = plt.figure(figsize=(8,4))
         gs = fig.add_gridspec(2,4)
         
         # 3D trajectory and force vector plot
         ax1 = fig.add_subplot(gs[0:, 0:2], projection='3d')
-        plot_3d_trajectory(ax1, sim_results, controller_types, controller_palette)
+        plot_3d_trajectory(ax1, config.sim_results, config.controller_types, config.controller_palette)
         
         # Force components
         ax2 = fig.add_subplot(gs[1, 2:])
-        plot_disturbance(ax2, sim_results[0], 'force', disturbance_palette)
+        plot_disturbance(ax2, config.sim_results[0], 'force', config.disturbance_palette)
         ax2.set_ylabel('Force [N]')
         # Position tracking error
         ax3 = fig.add_subplot(gs[0, 2:])
-        plot_position_error(ax3, sim_results, controller_types, controller_palette)
-        
+        plot_position_error(ax3, config.sim_results, config.controller_types, config.controller_palette)
         
         return fig
     
-    def _plot_torque_experiment(self, sim_results, controller_types, controller_param, vehicle_params, controller_palette, disturbance_palette):
+    def _plot_torque_experiment(self, config: VisualizationConfig):
         """Specific plotting for torque experiments"""
         fig = plt.figure(figsize=(8,4))
         gs = fig.add_gridspec(2,4)
         
         # 3D trajectory and torque vector plot
         ax1 = fig.add_subplot(gs[0:, 0:2], projection='3d')
-        plot_3d_trajectory(ax1, sim_results, controller_types, controller_palette)
+        plot_3d_trajectory(ax1, config.sim_results, config.controller_types, config.controller_palette)
         
         # Torque components
         ax2 = fig.add_subplot(gs[1, 2:])
-        plot_disturbance(ax2, sim_results[0], 'torque', disturbance_palette)
+        plot_disturbance(ax2, config.sim_results[0], 'torque', config.disturbance_palette)
         ax2.set_ylabel('Torque [Nm]')
         # Position tracking error
         ax3 = fig.add_subplot(gs[0, 2:])
-        plot_position_error(ax3, sim_results, controller_types, controller_palette)
+        plot_position_error(ax3, config.sim_results, config.controller_types, config.controller_palette)
 
         return fig
 
-    def _plot_rotor_efficiency_experiment(self, sim_results, controller_types, controller_param, vehicle_params, controller_palette, disturbance_palette):
-        num_controllers = len(controller_types)
+    def _plot_rotor_efficiency_experiment(self, config: VisualizationConfig):
+        num_controllers = len(config.controller_types)
         fig = plt.figure(figsize=(8,6*num_controllers))
         each_row_num = 3
         gs = fig.add_gridspec(each_row_num*num_controllers, 4)
 
         # Get global min/max values
-        pos_error_min, pos_error_max = get_position_error_range(sim_results)
-        rotor_speed_min, rotor_speed_max = get_rotor_speed_range(sim_results)
+        pos_error_min, pos_error_max = get_position_error_range(config.sim_results)
+        rotor_speed_min, rotor_speed_max = get_rotor_speed_range(config.sim_results)
         window = np.ones(20)/20  # 20-point moving average
 
-        for idx, (result, ctrl_type) in enumerate(zip(sim_results, controller_types)):
+        for idx, (result, ctrl_type) in enumerate(zip(config.sim_results, config.controller_types)):
             ax1 = fig.add_subplot(gs[idx*each_row_num:(idx+1)*each_row_num, 0:2], projection='3d')
-            controller_palette = sns.color_palette("husl", len(controller_types))
-            plot_3d_trajectory(ax1, sim_results, controller_types, controller_palette)
+            controller_palette = sns.color_palette("husl", len(config.controller_types))
+            plot_3d_trajectory(ax1, config.sim_results, config.controller_types, controller_palette)
             plot_position_errors_subplot(fig, gs[idx*each_row_num, 2:], result, ctrl_type, idx==0,
                                     pos_error_min, pos_error_max)
             plot_rotor_speeds_subplot(fig, gs[idx*each_row_num+1,2:], result, ctrl_type, idx==0,
                                     rotor_speed_min, rotor_speed_max, window)
             # plot the rotor efficiency
             ax3 = fig.add_subplot(gs[idx*each_row_num+2, 2:])
-            rotor_eff = np.tile(vehicle_params['rotor_efficiency'], (result['time'].shape[0], 1))
+            rotor_eff = np.tile(config.vehicle_params['rotor_efficiency'], (result['time'].shape[0], 1))
             ax3.plot(result['time'], rotor_eff[:,0], label='Rotor 1')
             ax3.plot(result['time'], rotor_eff[:,1], label='Rotor 2')
             ax3.plot(result['time'], rotor_eff[:,2], label='Rotor 3')
@@ -147,7 +164,7 @@ class ExperimentVisualizer:
             
         return fig
     
-    def _plot_uncertainty_experiment(self, sim_results, controller_types, controller_param, vehicle_params, controller_palette, disturbance_palette):
+    def _plot_uncertainty_experiment(self, config: VisualizationConfig):
         """Specific plotting for uncertainty experiments"""
         """
         Create a radar chart comparing ground truth and reference model parameters
@@ -160,37 +177,34 @@ class ExperimentVisualizer:
         fig = plt.figure(figsize=(8,4))
         gs = fig.add_gridspec(2,4)
         ax1 = fig.add_subplot(gs[0:, 0:2], projection='3d')
-        plot_3d_trajectory(ax1, sim_results, controller_types, controller_palette)
+        plot_3d_trajectory(ax1, config.sim_results, config.controller_types, config.controller_palette)
         ax1.set_title('3D Trajectory')
         ax2 = fig.add_subplot(gs[0:, 2:], projection='polar')
-        plot_model_uncertainty(ax2, controller_param, vehicle_params)
+        plot_model_uncertainty(ax2, config.controller_param, config.vehicle_params)
 
         return fig
     
-    
-    
-
-    def _plot_payload_experiment(self, sim_results, controller_types, controller_param, vehicle_params, controller_palette, disturbance_palette):
+    def _plot_payload_experiment(self, config: VisualizationConfig):
         """Specific plotting for payload experiments"""
         fig = plt.figure(figsize=(6,6))
         gs = fig.add_gridspec(4,4)
         
         # 3D trajectory plot
         ax1 = fig.add_subplot(gs[0:2, 0:2], projection='3d')
-        plot_3d_trajectory(ax1, sim_results, controller_types, 
-                           controller_palette,elev=45,azim=-90,roll=0)
+        plot_3d_trajectory(ax1, config.sim_results, config.controller_types, 
+                           config.controller_palette, elev=45, azim=-90, roll=0)
         
         # Position tracking error
         ax2 = fig.add_subplot(gs[2, :])
-        plot_position_error(ax2, sim_results, controller_types, controller_palette)
+        plot_position_error(ax2, config.sim_results, config.controller_types, config.controller_palette)
         
         # Payload mass ratio
-        force = sim_results[0]['state']['ext_force']
-        torque = sim_results[0]['state']['ext_torque']
+        force = config.sim_results[0]['state']['ext_force']
+        torque = config.sim_results[0]['state']['ext_torque']
         force_mag = np.linalg.norm(force, axis=1)
-        payload_mass_ratio = force_mag / (vehicle_params['mass'] * 9.81)
+        payload_mass_ratio = force_mag / (config.vehicle_params['mass'] * 9.81)
         ax3 = fig.add_subplot(gs[3, :])
-        ax3.plot(sim_results[0]['time'], payload_mass_ratio)
+        ax3.plot(config.sim_results[0]['time'], payload_mass_ratio)
         ax3.set_xlabel('Time [s]')
         ax3.set_ylabel('Payload Mass Ratio [\%]')
         ax3.grid(True)
@@ -235,9 +249,29 @@ class ExperimentVisualizer:
             print(f"Average heading error: {heading_error:.3f} deg")
         print("-" * 50)
 
+    @dataclass
+    class When2FailConfig:
+        """Configuration for when2fail analysis visualization"""
+        experiment_type: str
+        controller_types: List[str]
+        intensities: Dict[str, List[float]]
+        success_rates: Dict[str, List[float]]
+        pos_errors: Dict[str, List[float]]
+        heading_errors: Dict[str, List[float]]
+
     def plot_when2fail_results(self, experiment_type, controller_types, intensities, 
                              success_rates, pos_errors, heading_errors):
         """Plot the results of the when2fail analysis with physical disturbance values"""
+        # Create configuration object
+        config = self.When2FailConfig(
+            experiment_type=experiment_type,
+            controller_types=controller_types,
+            intensities=intensities,
+            success_rates=success_rates,
+            pos_errors=pos_errors,
+            heading_errors=heading_errors
+        )
+        
         plt.figure(figsize=(3.5*3.5, 3.5))
         
         # Map intensities to actual physical quantities based on experiment type
@@ -267,22 +301,22 @@ class ExperimentVisualizer:
                 lambda i: 100 * min(2.0, i)
             )
         }
-        xlabel, transform_fn = x_labels.get(ExperimentType(experiment_type), ('Intensity Multiplier', lambda i: i))
+        xlabel, transform_fn = x_labels.get(ExperimentType(config.experiment_type), ('Intensity Multiplier', lambda i: i))
 
         # Success Rate Plot
         plt.subplot(131)
-        for ctrl in controller_types:
-            x_values = [transform_fn(i) for i in intensities[ctrl]]
-            plt.plot(x_values, success_rates[ctrl], marker='o', label=ctrl)
+        for ctrl in config.controller_types:
+            x_values = [transform_fn(i) for i in config.intensities[ctrl]]
+            plt.plot(x_values, config.success_rates[ctrl], marker='o', label=ctrl)
         plt.xlabel(xlabel)
         plt.ylabel('Success Rate (\%)')
         plt.grid(True)
         plt.legend()
         # Position Error Plot
         plt.subplot(132)
-        for ctrl in controller_types:
-            x_values = [transform_fn(i) for i in intensities[ctrl]]
-            plt.plot(x_values, pos_errors[ctrl], marker='o', label=ctrl)
+        for ctrl in config.controller_types:
+            x_values = [transform_fn(i) for i in config.intensities[ctrl]]
+            plt.plot(x_values, config.pos_errors[ctrl], marker='o', label=ctrl)
         plt.xlabel(xlabel)
         plt.ylabel('Average Position Error (m)')
         plt.yscale('log')
@@ -291,24 +325,24 @@ class ExperimentVisualizer:
         
         # Heading Error Plot
         plt.subplot(133)
-        for ctrl in controller_types:
-            x_values = [transform_fn(i) for i in intensities[ctrl]]
-            plt.plot(x_values, heading_errors[ctrl], marker='o', label=ctrl)
+        for ctrl in config.controller_types:
+            x_values = [transform_fn(i) for i in config.intensities[ctrl]]
+            plt.plot(x_values, config.heading_errors[ctrl], marker='o', label=ctrl)
         plt.xlabel(xlabel)
         plt.ylabel('Average Heading Error (deg)')
         plt.grid(True)
         plt.legend()
         
         plt.tight_layout()
-        plt.savefig(self.plot_dir / f'vis_when2fail_{experiment_type}_{"_".join(controller_types)}.png', 
+        plt.savefig(self.plot_dir / f'vis_when2fail_{config.experiment_type}_{"_".join(config.controller_types)}.png', 
                     dpi=300, bbox_inches='tight')
         plt.show()        
         # Print summary with physical quantities
         print("\nWhen2Fail Analysis Summary:")
         print("-" * 50)
-        print(f"Experiment type: {experiment_type}")
-        for ctrl in controller_types:
+        print(f"Experiment type: {config.experiment_type}")
+        for ctrl in config.controller_types:
             print(f"\n{ctrl}:")
-            print(f"Final success rate: {success_rates[ctrl][-1]:.1f}%")
-            print(f"Final position error: {pos_errors[ctrl][-1]:.2f} m")
-            print(f"Final heading error: {heading_errors[ctrl][-1]:.2f} deg")
+            print(f"Final success rate: {config.success_rates[ctrl][-1]:.1f}%")
+            print(f"Final position error: {config.pos_errors[ctrl][-1]:.2f} m")
+            print(f"Final heading error: {config.heading_errors[ctrl][-1]:.2f} deg")

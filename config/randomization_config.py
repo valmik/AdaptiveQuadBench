@@ -7,9 +7,7 @@ from rotorpy.trajectories.hover_traj import HoverTraj
 from rotorpy.trajectories.circular_traj import CircularTraj
 from rotorpy.wind.dryden_winds import DrydenGust
 from copy import deepcopy
-# TODO add citation to each controller
-# TODO: fix when2fail plot (select 2 conditions)
-# ?????? why???? PAPER version also do not work????
+
 
 class ExperimentType(Enum):
     """Enum for different experiment types"""
