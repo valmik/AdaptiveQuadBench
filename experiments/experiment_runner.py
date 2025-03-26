@@ -5,7 +5,7 @@ from pathlib import Path
 from quad_param.quadrotor import quad_params
 from rotorpy.world import World
 from rotorpy.vehicles.multirotor import Multirotor
-from randomization_config import RandomizationConfig
+from config.randomization_config import RandomizationConfig
 from .config_manager import ExperimentConfig
 from .results_manager import ResultsManager
 from .visualizer import ExperimentVisualizer
@@ -13,6 +13,12 @@ import pandas as pd
 import os
 import matplotlib.pyplot as plt
 from rotorpy.environments import Environment
+from utils.delay_analysis import compute_delay_margin, plot_delay_margin_results, visualize_delay_response, generate_random_trajectories, plot_multi_trajectory_results
+from rotorpy.trajectories.circular_traj import CircularTraj
+from dataclasses import dataclass, field
+from typing import Any, Dict
+
+
 
 class ExperimentRunner:
     def __init__(self, config: ExperimentConfig, controller_factory: Callable):
@@ -24,6 +30,8 @@ class ExperimentRunner:
     def run(self):
         if self.config.when2fail:
             self._run_when2fail()
+        elif self.config.delay_margin:
+            return self.run_delay_margin_experiment()
         elif self.config.visualize:
             self._run_visualization()
         else:
@@ -249,3 +257,125 @@ class ExperimentRunner:
             pos_errors=pos_errors,
             heading_errors=heading_errors,
         )
+
+    def run_delay_margin_experiment(self):
+        """Run experiments to determine delay margin across multiple trajectories."""
+        print("\nRunning Delay Margin Experiment...")
+        
+        # Create results directory if it doesn't exist
+        results_dir = self.results_manager.data_dir / 'delay_margin'
+        os.makedirs(results_dir, exist_ok=True)
+        
+        # Generate multiple trajectories
+        num_trajectories = 5  # Total number of trajectories to test
+        trajectories, trajectory_types = generate_random_trajectories(num_trajectories)
+        
+        # Store results for all controllers and trajectories
+        all_results = {}
+        
+        for controller_type in self.config.controller_types:
+            print(f"\nTesting delay margin for {controller_type}...")
+            
+            controller_results = {}
+            controller_delay_margins = []
+            
+            # Create controller-specific directory
+            controller_dir = results_dir / controller_type
+            os.makedirs(controller_dir, exist_ok=True)
+            
+            # Test each trajectory
+            for traj_idx, (trajectory, traj_name) in enumerate(zip(trajectories, trajectory_types)):
+                print(f"  Testing trajectory: {traj_name}")
+                
+                # Compute delay margin for this trajectory
+                margin, results = compute_delay_margin(
+                    controller_factory=self.controller_factory,
+                    controller_type=controller_type,
+                    vehicle_params=quad_params,
+                    trajectory=trajectory,
+                    initial_delay=0.0,
+                    max_delay=0.5,
+                    delay_step=0.01,
+                    test_duration=5.0,
+                    position_threshold=1.0
+                )
+                
+                controller_delay_margins.append(margin)
+                controller_results[traj_name] = {
+                    'delay_margin': margin,
+                    'results': results
+                }
+                
+                # Visualize individual trajectory response
+                fig_path = controller_dir / f'delay_response_{traj_name}.png'
+                visualize_delay_response(controller_type, results, save_path=fig_path)
+            
+            # Store results for this controller
+            all_results[controller_type] = {
+                'delay_margins': controller_delay_margins,
+                'trajectory_types': trajectory_types,
+                'detailed_results': controller_results
+            }
+            
+            # Plot delay margins across trajectories for this controller
+            fig_path = controller_dir / 'trajectory_comparison.png'
+            plot_multi_trajectory_results(
+                controller_type, 
+                trajectory_types, 
+                controller_delay_margins,
+                save_path=fig_path
+            )
+            
+            # Calculate statistics
+            avg_margin = np.mean(controller_delay_margins)
+            std_margin = np.std(controller_delay_margins)
+            min_margin = np.min(controller_delay_margins)
+            max_margin = np.max(controller_delay_margins)
+            
+            print(f"  Delay margin statistics:")
+            print(f"    Average: {avg_margin:.3f} ± {std_margin:.3f} seconds")
+            print(f"    Range: [{min_margin:.3f}, {max_margin:.3f}] seconds")
+            
+            # Save detailed results to CSV
+            results_data = []
+            for traj_name, margin in zip(trajectory_types, controller_delay_margins):
+                results_data.append({
+                    'trajectory': traj_name,
+                    'delay_margin': margin
+                })
+            
+            results_df = pd.DataFrame(results_data)
+            csv_path = controller_dir / 'delay_margins.csv'
+            results_df.to_csv(csv_path, index=False)
+        
+        # Compare controllers using average delay margins
+        avg_margins = [np.mean(all_results[ctrl]['delay_margins']) for ctrl in self.config.controller_types]
+        
+        # Plot comparison of average delay margins across controllers
+        fig_path = results_dir / 'controller_comparison.png'
+        plot_delay_margin_results(
+            self.config.controller_types,
+            avg_margins,
+            detailed_results=all_results,
+            save_path=fig_path
+        )
+        
+        # Save summary results
+        summary_data = []
+        for ctrl_type in self.config.controller_types:
+            margins = all_results[ctrl_type]['delay_margins']
+            summary_data.append({
+                'controller': ctrl_type,
+                'avg_delay_margin': np.mean(margins),
+                'std_delay_margin': np.std(margins),
+                'min_delay_margin': np.min(margins),
+                'max_delay_margin': np.max(margins)
+            })
+        
+        summary_df = pd.DataFrame(summary_data)
+        csv_path = results_dir / 'summary.csv'
+        summary_df.to_csv(csv_path, index=False)
+        
+        print(f"\nDelay margin analysis complete. Results saved to {results_dir}")
+        
+        return all_results
