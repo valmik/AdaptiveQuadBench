@@ -3,6 +3,12 @@ Python implementation of INDI Adaptive Controller based on:
 Ewoud J. J. Smeur, Qiping Chu and Guido C. H. E. de Croon
 "Adaptive incremental nonlinear dynamic inversion for attitude control of micro air vehicles"
 [DOI:10.2514/1.G001490]
+
+and
+
+Ezra Tal and Sertac Karaman
+"Accurate Tracking of Aggressive Quadrotor Trajectories Using Incremental Nonlinear Dynamic Inversion and Differential Flatness"
+[DOI:10.1109/TCST.2020.3001117]
 """
 
 import numpy as np

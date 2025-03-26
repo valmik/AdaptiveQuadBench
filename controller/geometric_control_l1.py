@@ -1,3 +1,10 @@
+"""
+Python implementation of L1 Adaptive Geometric Controller based on:
+Zhuohuan Wu, Sheng Cheng, Pan Zhao, Aditya Gahlawat, Kasey A. Ackerman, Arun Lakshmanan, Chengyu Yang, Jiahao Yu, Naira Hovakimyan.
+"L1Quad: L1 Adaptive Augmentation of Geometric Control for Agile Quadrotors with Performance Guarantees"
+[arXiv:2302.07208]
+"""
+
 from __future__ import print_function, division, absolute_import
 import numpy as np
 from scipy.spatial.transform import Rotation

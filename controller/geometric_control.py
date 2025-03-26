@@ -1,3 +1,10 @@
+"""
+Python implementation of Geometric Controller based on:
+Taeyoung Lee, Melvin Leok, and N.H. McClamroch.
+"Geometric Tracking Control of a Quadrotor UAV on SE(3)"
+[DOI: 10.1109/CDC.2010.5717652]
+"""
+
 import numpy as np
 from scipy.spatial.transform import Rotation
 from controller.controller_template import MultirotorControlTemplate

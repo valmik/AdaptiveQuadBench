@@ -1,3 +1,10 @@
+"""
+Python implementation of L1 Adaptive MPC Controller based on:
+Ran Tao, Pan Zhao, Ilya Kolmanovsky, and Naira Hovakimyan.
+"Robust Adaptive MPC Using Uncertainty Compensation"
+[DOI:10.23919/ACC60939.2024.10644611]
+"""
+
 import numpy as np
 from collections import deque
 from scipy.spatial.transform import Rotation
@@ -10,7 +17,7 @@ import math
 
 class L1_ModelPredictiveControl(ModelPredictiveControl):
     """
-
+    Implementation of L1 adaptive augmentation for MPC controller
     """
     def __init__(self, quad_params, trajectory=HoverTraj(), sim_rate=100, 
                  t_final=5, t_horizon=0.5, n_nodes=10 
@@ -200,6 +207,7 @@ class L1_ModelPredictiveControl(ModelPredictiveControl):
         baseline_control_input = super().update(t, state, flat_output)
         f = baseline_control_input['cmd_thrust']
         M = baseline_control_input['cmd_moment']
+        cmd_w = baseline_control_input['cmd_w']
 
         f_l1, M_l1, sigma_m_hat = self.L1AC(R,W,x,v,f,M)
 
@@ -216,6 +224,7 @@ class L1_ModelPredictiveControl(ModelPredictiveControl):
         control_input = {'cmd_motor_speeds':cmd_motor_speeds.reshape(4,),
                          'cmd_thrust':cmd_thrust,
                          'cmd_moment':cmd_moment,
+                         'cmd_w':cmd_w,
                          'cmd_q':cmd_q}  # This dict is required by simulation env
         
 

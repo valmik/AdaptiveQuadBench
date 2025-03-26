@@ -1,3 +1,10 @@
+"""
+Python implementation of Model Predictive Controller based on:
+Sihao Sun, Angel Romero, Philipp Foehn, Elia Kaufmann, and Davide Scaramuzza.
+"A Comparative Study of Nonlinear MPC and Differential-Flatness-Based Control for Quadrotor Agile Flight"
+[arXiv:2109.01365]
+"""
+
 import numpy as np
 from time import time
 from collections import deque
