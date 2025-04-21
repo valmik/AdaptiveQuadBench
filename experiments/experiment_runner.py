@@ -87,10 +87,14 @@ class ExperimentRunner:
         trajectories = config.create_trajectories()
         wind_profiles = config.create_wind_profiles()
         ext_force, ext_torque = config.create_ext_force_and_torque()
+        payload_masses, payload_positions = config.create_payload_disturbance()
         vehicle_params_list = config.create_vehicle_params(quad_params)
         vehicles = [Multirotor(params) for params in vehicle_params_list]
         controller_params_list = config.create_controller_params(quad_params)
-        
+
+        # Apply payload disturbance to vehicles
+        self._apply_payload_to_vehicles(vehicles, payload_masses, payload_positions)
+
         return {
             'trajectories': trajectories,
             'wind_profiles': wind_profiles,
@@ -101,6 +105,21 @@ class ExperimentRunner:
             'vehicle_params': vehicle_params_list
         }
 
+    def _apply_payload_to_vehicles(self, vehicles, payload_masses, payload_positions):
+        """
+        Update payload parameters to vehicles.
+        
+        Args:
+            vehicles: List of Multirotor instances
+            payload_masses: Array of payload masses
+            payload_positions: Array of payload positions
+        """
+        if payload_masses is None:
+            return
+        
+        for i, (vehicle, payload_mass, payload_position) in enumerate(zip(vehicles, payload_masses, payload_positions)):
+            # Update vehicle physical properties (mass, COM, inertia)
+            vehicle.update_payload(payload_mass, payload_position)
     def _run_visualization(self):
         print("Visualization mode: Running single trial with multiple controllers")
         
@@ -158,7 +177,8 @@ class ExperimentRunner:
             sim_results=sim_results,
             controller_types=self.config.controller_types,
             controller_param=components['controller_params'][0],
-            vehicle_params=components['vehicle_params'][0]
+            vehicle_params=components['vehicle_params'][0],
+            vehicle=components['vehicles'][0]
         )
 
     def _run_when2fail(self):
@@ -199,6 +219,13 @@ class ExperimentRunner:
             # Create vehicles from parameters
             vehicles = [Multirotor(params) for params in 
                        (varied_components.get('vehicle_params') or base_components['vehicle_params'])]
+            
+            if varied_components['payload_masses'] is not None:
+                self._apply_payload_to_vehicles(
+                    vehicles, 
+                    varied_components['payload_masses'], 
+                    varied_components['payload_positions'], 
+                )
             
             # Create controllers using appropriate parameters
             controller_params = varied_components.get('controller_params') or base_components['controller_params']

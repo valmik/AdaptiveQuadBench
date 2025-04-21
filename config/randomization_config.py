@@ -200,6 +200,7 @@ class RandomizationConfig:
 
         varied_components['wind_profiles'] = self.create_wind_profiles()
         varied_components['ext_force'], varied_components['ext_torque'] = self.create_ext_force_and_torque()
+        varied_components['payload_masses'], varied_components['payload_positions'] = self.create_payload_disturbance()
         if self.experiment_type == ExperimentType.ROTOR_EFFICIENCY or self.experiment_type == ExperimentType.UNCERTAINTY:
             varied_components['vehicle_params'] = self.create_vehicle_params(self.quad_params)
             varied_components['controller_params'] = self.create_controller_params(self.quad_params)
@@ -277,13 +278,21 @@ class RandomizationConfig:
         return vehicle_params_list
 
     def create_payload_disturbance(self) -> tuple[Optional[np.ndarray], Optional[np.ndarray]]:
-        """Generate coupled force and torque from payload using stored quad_params"""
+        """
+        Generate payload masses and positions for disturbance testing.
+        
+        This method only generates the physical parameters of the payload (mass and position).
+        The actual application of the payload to vehicles and calculation of resulting forces
+        and torques should be handled separately.
+        
+        Returns:
+            tuple: (payload_masses, payload_positions) or (None, None) if payload is disabled
+        """
         if not self.payload_enabled:
             return None, None
             
-        payload_forces = []
-        payload_torques = []
-        gravity = np.array([0, 0, -9.81])
+        payload_masses = []
+        payload_positions = []
         
         # Use stored quad_params
         quad_mass = self.quad_params.get('mass', 1.0)
@@ -295,21 +304,15 @@ class RandomizationConfig:
             
             offset_ratio = np.random.uniform(*self.payload_offset_ratio_range, size=3)
             offset = offset_ratio * quad_arm_length
-            force = mass * gravity
-            torque = np.cross(offset,force)
-            payload_forces.append(force)
-            payload_torques.append(torque)
+            payload_masses.append(mass)
+            payload_positions.append(offset)
             
-        return np.array(payload_forces), np.array(payload_torques)
+        return np.array(payload_masses), np.array(payload_positions)
     
     def create_ext_force_and_torque(self) -> tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         """Generate randomized external forces and torques"""
         ext_force = np.zeros((self.num_trials, 3))
         ext_torque = np.zeros((self.num_trials, 3))
-        if self.payload_enabled:
-            payload_force, payload_torque = self.create_payload_disturbance()
-            ext_force += payload_force
-            ext_torque += payload_torque
         if self.ext_force_enabled:
             ext_force += np.random.uniform(*self.force_range, size=(self.num_trials, 3))
         if self.ext_torque_enabled:

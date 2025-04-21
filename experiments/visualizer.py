@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional
 from experiments.plotting_utils import *
 from utils.parallel_data_collection import compute_cost
 from config.randomization_config import ExperimentType
-
+from rotorpy.vehicles.multirotor import Multirotor
 @dataclass
 class VisualizationConfig:
     """Configuration for experiment visualization"""
@@ -17,6 +17,7 @@ class VisualizationConfig:
     disturbance_palette: Optional[Any] = None
     controller_param: Optional[Dict] = None
     vehicle_params: Optional[Dict] = None
+    vehicle: Optional[Multirotor] = None
     experiment_type: Optional[str] = None
 
 class ExperimentVisualizer:
@@ -26,7 +27,7 @@ class ExperimentVisualizer:
         self.plot_dir.mkdir(parents=True, exist_ok=True)
         ModifyPlotForPublication()
 
-    def visualize_trials(self, experiment_type, sim_results, controller_types, controller_param, vehicle_params):
+    def visualize_trials(self, experiment_type, sim_results, controller_types, controller_param, vehicle_params, vehicle):
         """Create plots based on experiment type
         
         Args:
@@ -35,7 +36,7 @@ class ExperimentVisualizer:
             controller_types (list): List of controller names
             controller_param (list): List of controller parameters
             vehicle_params (dict): Vehicle parameters
-            
+            vehicle (Multirotor): Vehicle object
         Raises:
             ValueError: If experiment_type is not supported
         """
@@ -45,6 +46,7 @@ class ExperimentVisualizer:
             controller_types=controller_types,
             controller_param=controller_param,
             vehicle_params=vehicle_params,
+            vehicle=vehicle,
             controller_palette=sns.color_palette("husl", len(controller_types)),
             disturbance_palette=sns.color_palette("Set1", 3),
             experiment_type=experiment_type
@@ -198,44 +200,63 @@ class ExperimentVisualizer:
         ax2 = fig.add_subplot(gs[2, :])
         plot_position_error(ax2, config.sim_results, config.controller_types, config.controller_palette)
         
-        # Payload mass ratio
-        force = config.sim_results[0]['state']['ext_force']
-        torque = config.sim_results[0]['state']['ext_torque']
-        force_mag = np.linalg.norm(force, axis=1)
-        payload_mass_ratio = force_mag / (config.vehicle_params['mass'] * 9.81)
+        # Payload mass ratio and attachment visualization
+        print(config.sim_results[0]['state'].keys())
+        ext_torque = config.sim_results[0]['state']['ext_torque']
+
+        time = config.sim_results[0]['time']
+        
+        # Calculate when the payload is attached (ext_torque is non-zero)
+        payload_attached = np.sum(np.abs(ext_torque), axis=1) > 0.01  # Small threshold to handle numerical precision
+        payload_ratio_array = np.zeros_like(time)
+        payload_ratio_array[payload_attached] = config.vehicle.payload_mass / config.vehicle.mass
+        
+        # Plot payload mass ratio
         ax3 = fig.add_subplot(gs[3, :])
-        ax3.plot(config.sim_results[0]['time'], payload_mass_ratio)
-        ax3.set_xlabel('Time [s]')
-        ax3.set_ylabel('Payload Mass Ratio [\%]')
+        ax3.plot(time, payload_ratio_array)
+        ax3.set_ylabel('Payload Mass Ratio')
         ax3.grid(True)
 
-        # Payload location visualization (top-down view)
+        # Payload location and COM visualization (top-down view)
         ax4 = fig.add_subplot(gs[0:2, 2:], aspect='equal')
         plot_drone(ax4)
-        # Compute and plot payload location
-        def compute_force_location(f, t):
-            """Compute payload location from force and torque"""
-            force_mag = np.linalg.norm(f)
-            if force_mag < 1e-6:
-                return np.zeros(3)
-            # Project torque onto plane perpendicular to force
-            f_unit = f / force_mag
-            t_perp = t - np.dot(t, f_unit) * f_unit
-            # Compute location
-            r = -np.cross(t_perp, f) / (force_mag ** 2)
-            return r
-
-        locations = np.array([compute_force_location(f, t) for f, t in zip(force, torque)])
-        # only plot the non-zero locations
-        locations = locations[np.linalg.norm(locations, axis=1) > 1e-6]
-        ax4.plot(locations[0, 0], locations[0, 1], 'r*', alpha=0.5, label='Payload')
+        
+        # Plot the COM position
+        com = config.vehicle.com
+        ax4.plot(com[0], com[1], 'go', markersize=8, label='COM')
+        
+        # Get payload position if available
+        if hasattr(config.vehicle, 'payload_position'):
+            locations = config.vehicle.payload_position
+            if isinstance(locations, np.ndarray) and locations.size > 0:
+                ax4.plot(locations[0], locations[1], 'r*', markersize=10, label='Payload')
+                
+                # Draw a line connecting COM and payload to visualize the offset
+                ax4.plot([com[0], locations[0]], [com[1], locations[1]], 'k--', alpha=0.7)
+                
+                # Annotate the distance
+                offset = (np.linalg.norm(locations[:2] - com[:2]) / config.vehicle.arm_length) * 100
+                midpoint = (com[:2] + locations[:2]) 
+                ax4.annotate(f"{offset:.2f} \% of arm length", xy=midpoint, xytext=(10, 10), 
+                            textcoords="offset points", ha='center', va='bottom',
+                            bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.7))
         
         # Formatting
         ax4.set_xlabel('X [m]')
         ax4.set_ylabel('Y [m]')
-        ax4.set_title('Payload Location (Top View)')
+        ax4.set_title('Payload and COM Location\n(Top View)')
         ax4.grid(True)
-        ax4.legend()
+        ax4.legend(loc='upper right')
+        
+        # Set equal axis limits for better visualization
+        max_range = max(
+            abs(ax4.get_xlim()[1] - ax4.get_xlim()[0]),
+            abs(ax4.get_ylim()[1] - ax4.get_ylim()[0])
+        ) / 2.0
+        mid_x = (ax4.get_xlim()[1] + ax4.get_xlim()[0]) / 2.0
+        mid_y = (ax4.get_ylim()[1] + ax4.get_ylim()[0]) / 2.0
+        ax4.set_xlim(mid_x - max_range, mid_x + max_range)
+        ax4.set_ylim(mid_y - max_range, mid_y + max_range)
         
         return fig
 

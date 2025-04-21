@@ -1,4 +1,3 @@
-
 import numpy as np
 
 d = 0.166  # Calculated from positions
@@ -13,6 +12,7 @@ quad_params = {
     'Iyz':  0.0,        # kg*m^2 
     'Ixz':  0.0,        # kg*m^2
     'arm_length': d,    # meters
+    'com': np.array([0.0, 0.0, 0.0]),  # Center of mass position in body frame
 
     #           x
     #           ^
