@@ -115,7 +115,7 @@ Results are saved in the `data` directory and can be visualized using the includ
 
 ## Citation
 
-If you use AdaptiveQuadBench in your research, please cite:
+<!-- If you use AdaptiveQuadBench in your research, please cite:
 
 ```bibtex
 @misc{zhang2025adaptivequadbench,
@@ -126,7 +126,7 @@ If you use AdaptiveQuadBench in your research, please cite:
   journal = {GitHub repository},
   howpublished = {\url{https://github.com/Dz298/AdaptiveQuadBench}}
 }
-```
+``` -->
 
 Additionally, please cite the specific controller implementations you use:
 
