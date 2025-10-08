@@ -1,5 +1,9 @@
 # AdaptiveQuadBench
 
+![System Overview](media/system_overview.png)
+
+*Figure from our paper: [A Simulation Evaluation Suite for Robust Adaptive Quadcopter Control](https://arxiv.org/abs/2510.03471)*
+
 AdaptiveQuadBench is a standarized testbed for adaptive quadrotor controllers, built on top of the RotorPy simulator. It provides implementations of various adaptive control strategies and tools to evaluate their performance under different disturbances and conditions.
 
 ## Features
@@ -115,18 +119,19 @@ Results are saved in the `data` directory and can be visualized using the includ
 
 ## Citation
 
-<!-- If you use AdaptiveQuadBench in your research, please cite:
+If you use AdaptiveQuadBench in your research, please cite:
 
 ```bibtex
-@misc{zhang2025adaptivequadbench,
-  author = {Zhang, Dingqi},
-  title = {AdaptiveQuadBench: A Benchmarking Framework for Adaptive Quadrotor Control},
-  year = {2025},
-  publisher = {GitHub},
-  journal = {GitHub repository},
-  howpublished = {\url{https://github.com/Dz298/AdaptiveQuadBench}}
+@misc{zhang2025simulationevaluationsuiterobust,
+      title={A Simulation Evaluation Suite for Robust Adaptive Quadcopter Control}, 
+      author={Dingqi Zhang and Ran Tao and Sheng Cheng and Naira Hovakimyan and Mark W. Mueller},
+      year={2025},
+      eprint={2510.03471},
+      archivePrefix={arXiv},
+      primaryClass={cs.RO},
+      url={https://arxiv.org/abs/2510.03471}, 
 }
-``` -->
+```
 
 Additionally, please cite the specific controller implementations you use:
 
