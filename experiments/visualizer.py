@@ -202,14 +202,51 @@ class ExperimentVisualizer:
         
         # Payload mass ratio and attachment visualization
         print(config.sim_results[0]['state'].keys())
-        ext_torque = config.sim_results[0]['state']['ext_torque']
-
+        
         time = config.sim_results[0]['time']
         
-        # Calculate when the payload is attached (ext_torque is non-zero)
-        payload_attached = np.sum(np.abs(ext_torque), axis=1) > 0.01  # Small threshold to handle numerical precision
+        # Get payload attachment state from simulation state
+        if 'payload_attached' in config.sim_results[0]['state']:
+            # Use the payload_attached field if available (new implementation with predetermined toggle times)
+            payload_attached = config.sim_results[0]['state']['payload_attached']
+        else:
+            # Fallback to old method: check if ext_torque is non-zero (for backward compatibility)
+            ext_torque = config.sim_results[0]['state']['ext_torque']
+            payload_attached = np.sum(np.abs(ext_torque), axis=1) > 0.01  # Small threshold to handle numerical precision
+        
         payload_ratio_array = np.zeros_like(time)
-        payload_ratio_array[payload_attached] = config.vehicle.payload_mass / config.vehicle.mass
+        # Calculate payload mass ratio when attached
+        # The vehicle.mass at the end of simulation may not reflect the mass at each time step
+        # We need to calculate base_mass based on whether payload is currently attached
+        # When payload is attached: vehicle.mass = base_mass + payload_mass
+        # When payload is not attached: vehicle.mass = base_mass
+        # Get payload mass from state dictionary (stored during simulation)
+        # This is more reliable than vehicle.payload_mass which may be 0 if payload was detached at the end
+        if 'payload_mass' in config.sim_results[0]['state']:
+            payload_mass = config.sim_results[0]['state']['payload_mass'][0]  # Get first value (should be constant)
+        else:
+            # Fallback to vehicle payload_mass
+            payload_mass = config.vehicle.payload_mass if hasattr(config.vehicle, 'payload_mass') and config.vehicle.payload_mass > 0 else 0
+        
+        if payload_mass > 0:
+            # Calculate base mass: if payload is currently attached at the end, base_mass = vehicle.mass - payload_mass
+            # Otherwise, base_mass = vehicle.mass
+            # We'll use the payload_attached state to determine this per time step
+            # For simplicity, we'll use the end state to estimate base_mass
+            # If payload is attached at the end, base_mass = vehicle.mass - payload_mass
+            # Otherwise, base_mass = vehicle.mass
+            if payload_attached[-1] if len(payload_attached) > 0 else False:
+                # Payload is attached at the end, so current vehicle.mass includes payload
+                base_mass = config.vehicle.mass - payload_mass
+            else:
+                # Payload is not attached at the end, so current vehicle.mass is base mass
+                base_mass = config.vehicle.mass
+            
+            # Calculate ratio only when payload is attached
+            payload_ratio_array[payload_attached] = payload_mass / base_mass if base_mass > 0 else 0
+        else:
+            # No payload configured
+            payload_ratio_array[:] = 0
         
         # Plot payload mass ratio
         ax3 = fig.add_subplot(gs[3, :])

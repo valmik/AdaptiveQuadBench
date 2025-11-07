@@ -13,6 +13,7 @@ class SimulationConfig:
     num_simulations: int = 100
     ext_force: Optional[List[Any]] = None
     ext_torque: Optional[List[Any]] = None
+    disturbance_toggle_times: Optional[List[List[float]]] = None
     parallel: bool = True
     save_individual_trials: bool = False
     save_trial_path: Optional[Path] = None

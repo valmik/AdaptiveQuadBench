@@ -201,6 +201,7 @@ class RandomizationConfig:
         varied_components['wind_profiles'] = self.create_wind_profiles()
         varied_components['ext_force'], varied_components['ext_torque'] = self.create_ext_force_and_torque()
         varied_components['payload_masses'], varied_components['payload_positions'] = self.create_payload_disturbance()
+        varied_components['disturbance_toggle_times'] = self.create_disturbance_toggle_times()
         if self.experiment_type == ExperimentType.ROTOR_EFFICIENCY or self.experiment_type == ExperimentType.UNCERTAINTY:
             varied_components['vehicle_params'] = self.create_vehicle_params(self.quad_params)
             varied_components['controller_params'] = self.create_controller_params(self.quad_params)
@@ -318,6 +319,54 @@ class RandomizationConfig:
         if self.ext_torque_enabled:
             ext_torque += np.random.uniform(*self.torque_range, size=(self.num_trials, 3))
         return ext_force, ext_torque
+    
+    def create_disturbance_toggle_times(self, t_final: float = 5.0, min_toggle_interval: float = 0.5) -> Optional[List[List[float]]]:
+        """
+        Generate predetermined toggle times for force/torque/payload disturbances.
+        
+        Args:
+            t_final: Final simulation time in seconds
+            min_toggle_interval: Minimum time between toggles in seconds
+            
+        Returns:
+            List of toggle time lists (one per trial), or None if disturbances are disabled.
+            Each inner list contains times when disturbances should be toggled on/off.
+        """
+        # Only generate toggle times if force, torque, or payload is enabled
+        if not (self.ext_force_enabled or self.ext_torque_enabled or self.payload_enabled):
+            return None
+        
+        toggle_times_list = []
+        
+        for _ in range(self.num_trials):
+            # Generate multiple toggle times throughout the simulation
+            # Expected number of toggles based on the original probability: 2*t_step/t_final per step
+            # With t_step ~ 0.01 and t_final = 5, this gives ~0.004 per step
+            # Over 500 steps, this gives ~2 toggles on average
+            # We'll generate 1-4 toggle times per trial
+            num_toggles = np.random.randint(1, 5)
+            
+            # Generate toggle times uniformly distributed across the simulation
+            # Ensure minimum interval between toggles
+            toggle_times = []
+            for _ in range(num_toggles):
+                # Generate a time that's at least min_toggle_interval away from existing toggles
+                max_attempts = 100
+                for _ in range(max_attempts):
+                    candidate_time = np.random.uniform(min_toggle_interval, t_final - min_toggle_interval)
+                    # Check if it's far enough from existing toggles
+                    if len(toggle_times) == 0 or min(abs(candidate_time - t) for t in toggle_times) >= min_toggle_interval:
+                        toggle_times.append(candidate_time)
+                        break
+                else:
+                    # If we couldn't find a valid time, skip this toggle
+                    break
+            
+            # Sort toggle times
+            toggle_times.sort()
+            toggle_times_list.append(toggle_times)
+        
+        return toggle_times_list
 
     
     def create_controller_params(self, base_params: Dict[str, Any]) -> List[Dict[str, Any]]:

@@ -83,6 +83,10 @@ def single_traj_instance(config: SimulationConfig, seed=None):
     ext_torque = None
     if config.ext_torque is not None:
         ext_torque = config.ext_torque[traj_id % len(config.ext_torque)]
+    
+    disturbance_toggle_times = None
+    if config.disturbance_toggle_times is not None:
+        disturbance_toggle_times = config.disturbance_toggle_times[traj_id % len(config.disturbance_toggle_times)]
 
     controller.update_trajectory(traj)
 
@@ -90,7 +94,8 @@ def single_traj_instance(config: SimulationConfig, seed=None):
     sim_instance = Environment(vehicle=vehicle, controller=controller, 
                              wind_profile=wind_profile,
                              trajectory=traj, sim_rate=100,
-                             ext_force=ext_force, ext_torque=ext_torque)
+                             ext_force=ext_force, ext_torque=ext_torque,
+                             disturbance_toggle_times=disturbance_toggle_times)
 
     # Set the initial state to the first waypoint at hover. 
     x0 = {'x': np.array([0, 0, 0]),

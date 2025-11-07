@@ -74,6 +74,7 @@ class ExperimentRunner:
                 num_simulations=self.config.num_trials,
                 ext_force=components['ext_force'],
                 ext_torque=components['ext_torque'],
+                disturbance_toggle_times=components['disturbance_toggle_times'],
                 parallel=use_parallel,
                 save_individual_trials=self.config.save_trials,
                 experiment_type=self.config.experiment_type,
@@ -88,6 +89,7 @@ class ExperimentRunner:
         wind_profiles = config.create_wind_profiles()
         ext_force, ext_torque = config.create_ext_force_and_torque()
         payload_masses, payload_positions = config.create_payload_disturbance()
+        disturbance_toggle_times = config.create_disturbance_toggle_times()
         vehicle_params_list = config.create_vehicle_params(quad_params)
         vehicles = [Multirotor(params) for params in vehicle_params_list]
         controller_params_list = config.create_controller_params(quad_params)
@@ -100,6 +102,7 @@ class ExperimentRunner:
             'wind_profiles': wind_profiles,
             'ext_force': ext_force,
             'ext_torque': ext_torque,
+            'disturbance_toggle_times': disturbance_toggle_times,
             'vehicles': vehicles,
             'controller_params': controller_params_list,
             'vehicle_params': vehicle_params_list
@@ -149,7 +152,8 @@ class ExperimentRunner:
                 trajectory=components['trajectories'][0],
                 sim_rate=100,
                 ext_force=components['ext_force'][0] if components['ext_force'] is not None else None,
-                ext_torque=components['ext_torque'][0] if components['ext_torque'] is not None else None
+                ext_torque=components['ext_torque'][0] if components['ext_torque'] is not None else None,
+                disturbance_toggle_times=components['disturbance_toggle_times'][0] if components.get('disturbance_toggle_times') is not None else None
             )
 
             x0 = {
@@ -257,6 +261,7 @@ class ExperimentRunner:
                     num_simulations=self.config.num_trials,
                     ext_force=varied_components['ext_force'],
                     ext_torque=varied_components['ext_torque'],
+                    disturbance_toggle_times=varied_components.get('disturbance_toggle_times'),
                     parallel=use_parallel,
                     save_individual_trials=self.config.save_trials,
                     experiment_type=self.config.experiment_type,
