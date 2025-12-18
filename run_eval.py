@@ -6,6 +6,7 @@ from controller.indi_adaptive_controller import INDIAdaptiveController
 from controller.quadrotor_control_mpc import ModelPredictiveControl
 from controller.quadrotor_control_mpc_l1 import L1_ModelPredictiveControl
 from controller.Xadap_NN_control import Xadap_NN_control
+from controller.omnidrone_bridge import OmniDroneBridge
 from rotorpy.controllers.quadrotor_control import SE3Control
 
 # Import core components
