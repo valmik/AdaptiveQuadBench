@@ -4,9 +4,9 @@ import numpy as np
 from pathlib import Path
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
-from experiments.plotting_utils import *
-from utils.parallel_data_collection import compute_cost
-from config.randomization_config import ExperimentType
+from aqb.experiments.plotting_utils import *
+from aqb.utils.parallel_data_collection import compute_cost
+from aqb.config.randomization_config import ExperimentType
 from rotorpy.vehicles.multirotor import Multirotor
 @dataclass
 class VisualizationConfig:

@@ -13,8 +13,8 @@ Ezra Tal and Sertac Karaman
 
 import numpy as np
 from scipy.spatial.transform import Rotation
-from controller.controller_template import MultirotorControlTemplate
-from controller.quadrotor_util import *
+from aqb.controller.controller_template import MultirotorControlTemplate
+from aqb.controller.quadrotor_util import *
 from rotorpy.controllers.quadrotor_control import SE3Control
 from scipy.signal import butter
 from collections import deque

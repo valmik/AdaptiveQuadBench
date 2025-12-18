@@ -1,7 +1,7 @@
 from rotorpy.trajectories.minsnap import MinSnap
 from rotorpy.environments import Environment
 from rotorpy.utils.occupancy_map import OccupancyMap
-from config.simulation_config import SimulationConfig
+from aqb.config.simulation_config import SimulationConfig
 
 import numpy as np                  # For array creation/manipulation
 import matplotlib.pyplot as plt     # For plotting, although the simulator has a built in plotter

@@ -1,11 +1,11 @@
 import numpy as np
 # from rotorpy.controllers.quadrotor_traopt import QuadOptimizer
-from controller.quadrotor_traopt import QuadOptimizer
+from aqb.controller.quadrotor_traopt import QuadOptimizer
 from rotorpy.vehicles.crazyflie_params import quad_params
 from rotorpy.vehicles.hummingbird_params import quad_params  # There's also the Hummingbird
 from rotorpy.trajectories.circular_traj  import CircularTraj, ThreeDCircularTraj
 from rotorpy.trajectories.hover_traj  import HoverTraj
-from controller.quadrotor_util import minimum_snap_trajectory_generator
+from aqb.controller.quadrotor_util import minimum_snap_trajectory_generator
 
 class QuadMPC:
     def __init__(self, quad_params=quad_params, trajectory=CircularTraj(),

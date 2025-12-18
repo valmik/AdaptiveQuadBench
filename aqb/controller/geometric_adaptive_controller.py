@@ -7,9 +7,9 @@ Farhad A. Goodarzi, Daewon Lee, and Taeyoung Lee.
 
 import numpy as np
 from scipy.spatial.transform import Rotation
-from controller.controller_template import MultirotorControlTemplate
-from controller.geometric_control import GeoControl
-from controller.quadrotor_util import *
+from aqb.controller.controller_template import MultirotorControlTemplate
+from aqb.controller.geometric_control import GeoControl
+from aqb.controller.quadrotor_util import *
 class GeometricAdaptiveController(GeoControl):
     def __init__(self, vehicle_params, dt=0.01):
         """

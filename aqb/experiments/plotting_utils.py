@@ -3,7 +3,7 @@ import seaborn as sns
 import numpy as np
 import os
 from matplotlib import rcParams
-from quad_param.quadrotor import quad_params
+from aqb.quad_param.quadrotor import quad_params
 
 
 

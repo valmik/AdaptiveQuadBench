@@ -8,9 +8,9 @@ https://doi.org/10.1109/TRO.2025.3577037
 
 # import numpy as np
 from scipy.spatial.transform import Rotation
-from controller.controller_template import MultirotorControlTemplate
-from controller.geometric_control import GeoControl
-from controller.quadrotor_control_mpc import ModelPredictiveControl
+from aqb.controller.controller_template import MultirotorControlTemplate
+from aqb.controller.geometric_control import GeoControl
+from aqb.controller.quadrotor_control_mpc import ModelPredictiveControl
 from rotorpy.controllers.quadrotor_control import SE3Control
 from scipy.signal import butter
 import numpy as np

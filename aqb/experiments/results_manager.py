@@ -5,9 +5,9 @@ import numpy as np
 import os
 import csv
 import time
-from utils.parallel_data_collection import generate_data
+from aqb.utils.parallel_data_collection import generate_data
 from rotorpy.world import World
-from config.simulation_config import SimulationConfig
+from aqb.config.simulation_config import SimulationConfig
 class ResultsManager:
     def __init__(self):
         self.data_dir = Path(__file__).parent.parent / 'data'

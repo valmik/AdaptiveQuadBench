@@ -8,8 +8,8 @@ Ran Tao, Pan Zhao, Ilya Kolmanovsky, and Naira Hovakimyan.
 import numpy as np
 from collections import deque
 from scipy.spatial.transform import Rotation
-from controller.quadrotor_control_mpc import ModelPredictiveControl
-from controller.quadrotor_mpc import QuadMPC
+from aqb.controller.quadrotor_control_mpc import ModelPredictiveControl
+from aqb.controller.quadrotor_mpc import QuadMPC
 from rotorpy.trajectories.hover_traj  import HoverTraj
 from rotorpy.trajectories.circular_traj  import CircularTraj
 import numpy.linalg as la

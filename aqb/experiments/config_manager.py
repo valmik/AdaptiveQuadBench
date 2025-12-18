@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 import argparse
 from pathlib import Path
-from config.randomization_config import ExperimentType
+from aqb.config.randomization_config import ExperimentType
 
 @dataclass
 class ExperimentConfig:

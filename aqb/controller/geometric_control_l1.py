@@ -8,7 +8,7 @@ Zhuohuan Wu, Sheng Cheng, Pan Zhao, Aditya Gahlawat, Kasey A. Ackerman, Arun Lak
 from __future__ import print_function, division, absolute_import
 import numpy as np
 from scipy.spatial.transform import Rotation
-from controller.geometric_control import GeoControl
+from aqb.controller.geometric_control import GeoControl
 # import jax
 # import jax.numpy as np
 from scipy.integrate import odeint

@@ -11,9 +11,9 @@ from collections import deque
 from scipy.spatial.transform import Rotation
 from rotorpy.trajectories.hover_traj  import HoverTraj
 from rotorpy.trajectories.circular_traj  import CircularTraj
-from controller.quadrotor_mpc import QuadMPC
-from controller.quadrotor_util import skew_symmetric, v_dot_q, quaternion_inverse
-from controller.controller_template import MultirotorControlTemplate
+from aqb.controller.quadrotor_mpc import QuadMPC
+from aqb.controller.quadrotor_util import skew_symmetric, v_dot_q, quaternion_inverse
+from aqb.controller.controller_template import MultirotorControlTemplate
 class ModelPredictiveControl(MultirotorControlTemplate):
     """
 

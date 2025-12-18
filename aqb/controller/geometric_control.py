@@ -7,7 +7,7 @@ Taeyoung Lee, Melvin Leok, and N.H. McClamroch.
 
 import numpy as np
 from scipy.spatial.transform import Rotation
-from controller.controller_template import MultirotorControlTemplate
+from aqb.controller.controller_template import MultirotorControlTemplate
 
 #import jax
 # import jax.numpy as np
