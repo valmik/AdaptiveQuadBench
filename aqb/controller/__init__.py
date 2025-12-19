@@ -3,6 +3,8 @@ Controller implementations for AdaptiveQuadBench.
 """
 
 from .omnidrone_bridge import OmniDroneBridge
+from .omnidrone_direct import OmniDroneDirect
+from .compare_controllers import CompareControllers
 from .controller_template import MultirotorControlTemplate
 from .geometric_control import GeoControl
 from .geometric_adaptive_controller import GeometricAdaptiveController
@@ -14,6 +16,8 @@ from .Xadap_NN_control import Xadap_NN_control
 
 __all__ = [
     'OmniDroneBridge',
+    'OmniDroneDirect',
+    'CompareControllers',
     'MultirotorControlTemplate',
     'GeoControl',
     'GeometricAdaptiveController',
