@@ -53,6 +53,7 @@ class ExperimentVisualizer:
         )
         
         plot_functions = {
+            'no': self._plot_no_experiment,
             'wind': self._plot_wind_experiment,
             'force': self._plot_force_experiment,
             'torque': self._plot_torque_experiment,
@@ -75,6 +76,21 @@ class ExperimentVisualizer:
         self._print_metrics(sim_results, controller_types)
         
         return sim_results
+
+    def _plot_no_experiment(self, config: VisualizationConfig):
+        """Specific plotting for no experiment"""
+        fig = plt.figure(figsize=(8,4))
+        gs = fig.add_gridspec(2,4)
+        
+        # 3D trajectory and wind vector plot
+        ax1 = fig.add_subplot(gs[0:, 0:2], projection='3d')
+        plot_3d_trajectory(ax1, config.sim_results, config.controller_types, config.controller_palette)
+        
+        # Position tracking error
+        ax3 = fig.add_subplot(gs[0, 2:])
+        plot_position_error(ax3, config.sim_results, config.controller_types, config.controller_palette)
+        
+        return fig
 
     def _plot_wind_experiment(self, config: VisualizationConfig):
         """Specific plotting for wind experiments"""
